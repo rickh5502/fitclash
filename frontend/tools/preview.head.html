@@ -1,0 +1,56 @@
+<title>FitClash</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+  /* FitClash is a committed dark HUD: a gym at night, calibrated-plate colour.
+     It does not follow the host theme, so every colour is painted explicitly. */
+  :root { color-scheme: dark; }
+  html, body { height: 100%; background: #13161B; }
+  #root { min-height: 100%; }
+  body { margin: 0; color: #F2EFE7; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  ::selection { background: #FF7A1A; color: #0D1014; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0D1014; }
+  ::-webkit-scrollbar-thumb { background: #333945; border-radius: 4px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  .boot { display: grid; place-items: center; min-height: 60vh; color: #8B94A3;
+          font-family: 'Barlow Condensed', system-ui, sans-serif; letter-spacing: .18em;
+          text-transform: uppercase; font-size: 13px; }
+</style>
+
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          iron:  { 950:'#0D1014', 900:'#13161B', 800:'#1B1F26', 700:'#252A33', 600:'#333945', 500:'#4A5261' },
+          chalk: { DEFAULT:'#F2EFE7', dim:'#B9C0CB', muted:'#8B94A3' },
+          plate: { str:'#D8322C', sta:'#2C6FD1', con:'#E9B424', ember:'#FF7A1A', jade:'#2FA36B', rust:'#B4462F' },
+        },
+        fontFamily: {
+          display: ['Anton', 'Impact', 'Haettenschweiler', 'sans-serif'],
+          body: ['Barlow', 'system-ui', '-apple-system', 'sans-serif'],
+          data: ['"Barlow Condensed"', 'Barlow', 'system-ui', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/framer-motion@10.18.0/dist/framer-motion.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+
+<div id="root"><div class="boot">Loading the rack&hellip;</div></div>
+
+<script type="text/babel" data-presets="react">

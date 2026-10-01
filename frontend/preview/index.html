@@ -1,0 +1,1759 @@
+<title>FitClash</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+  /* FitClash is a committed dark HUD: a gym at night, calibrated-plate colour.
+     It does not follow the host theme, so every colour is painted explicitly. */
+  :root { color-scheme: dark; }
+  html, body { height: 100%; background: #13161B; }
+  #root { min-height: 100%; }
+  body { margin: 0; color: #F2EFE7; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  ::selection { background: #FF7A1A; color: #0D1014; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0D1014; }
+  ::-webkit-scrollbar-thumb { background: #333945; border-radius: 4px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  .boot { display: grid; place-items: center; min-height: 60vh; color: #8B94A3;
+          font-family: 'Barlow Condensed', system-ui, sans-serif; letter-spacing: .18em;
+          text-transform: uppercase; font-size: 13px; }
+</style>
+
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          iron:  { 950:'#0D1014', 900:'#13161B', 800:'#1B1F26', 700:'#252A33', 600:'#333945', 500:'#4A5261' },
+          chalk: { DEFAULT:'#F2EFE7', dim:'#B9C0CB', muted:'#8B94A3' },
+          plate: { str:'#D8322C', sta:'#2C6FD1', con:'#E9B424', ember:'#FF7A1A', jade:'#2FA36B', rust:'#B4462F' },
+        },
+        fontFamily: {
+          display: ['Anton', 'Impact', 'Haettenschweiler', 'sans-serif'],
+          body: ['Barlow', 'system-ui', '-apple-system', 'sans-serif'],
+          data: ['"Barlow Condensed"', 'Barlow', 'system-ui', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/framer-motion@10.18.0/dist/framer-motion.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+
+<div id="root"><div class="boot">Loading the rack&hellip;</div></div>
+
+<script type="text/babel" data-presets="react">
+/* ------------------------------------------------------------------------
+   Preview shim.
+
+   The component source below is byte-for-byte the shared body of
+   frontend/src/FitClash.jsx. Only the module preamble differs: in the Vite
+   app these names come from `react`, `framer-motion` and `lucide-react`;
+   here they come from the UMD globals plus a small inline icon set drawn in
+   lucide's geometry (24x24, 2px stroke, round caps).
+   ------------------------------------------------------------------------ */
+
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+const { motion, AnimatePresence, MotionConfig, useReducedMotion } = window.Motion;
+
+const icon = (name, markup) => {
+  const Icon = ({ size = 24, className = '', style, ...rest }) =>
+    React.createElement('svg', {
+      xmlns: 'http://www.w3.org/2000/svg',
+      width: size, height: size, viewBox: '0 0 24 24',
+      fill: 'none', stroke: 'currentColor', strokeWidth: 2,
+      strokeLinecap: 'round', strokeLinejoin: 'round',
+      className, style, ...rest,
+      dangerouslySetInnerHTML: { __html: markup },
+    });
+  Icon.displayName = name;
+  return Icon;
+};
+
+const Dumbbell      = icon('Dumbbell', '<path d="M4 8v8"/><path d="M8 5.5v13"/><path d="M16 5.5v13"/><path d="M20 8v8"/><path d="M8 12h8"/>');
+const Swords        = icon('Swords', '<path d="M2.5 2.5 15 15"/><path d="M21.5 2.5 9 15"/><path d="m15 15 2 2-3 3-2-2"/><path d="m9 15-2 2 3 3 2-2"/>');
+const Trophy        = icon('Trophy', '<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3a3 3 0 0 1-3 3"/><path d="M7 5H4a3 3 0 0 0 3 3"/>');
+const Flame         = icon('Flame', '<path d="M12 2c2 4 5 5.2 5 9a5 5 0 0 1-10 0c0-2 1-3.2 2-4.2 0 2 1 3.2 2 3.2 0-3 1-6 1-8z"/>');
+const Shield        = icon('Shield', '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>');
+const Zap           = icon('Zap', '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>');
+const Plus          = icon('Plus', '<path d="M12 5v14"/><path d="M5 12h14"/>');
+const Minus         = icon('Minus', '<path d="M5 12h14"/>');
+const X             = icon('X', '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>');
+const Check         = icon('Check', '<path d="M20 6 9 17l-5-5"/>');
+const LogOut        = icon('LogOut', '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>');
+const TrendingUp    = icon('TrendingUp', '<path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/>');
+const AlertTriangle = icon('AlertTriangle', '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>');
+const Timer         = icon('Timer', '<path d="M10 2h4"/><path d="M12 14v-4"/><circle cx="12" cy="14" r="8"/>');
+const Activity      = icon('Activity', '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>');
+const Crown         = icon('Crown', '<path d="M2 19h20"/><path d="m3 6 4 5 5-7 5 7 4-5-2 10H5L3 6z"/>');
+const Sparkles      = icon('Sparkles', '<path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15v4"/><path d="M17 17h4"/>');
+
+/* ------------------------------------------------------------------ rules */
+/* Mirrors GameProperties.java + Formulas.java. Keep the two in step. */
+
+const RULES = {
+  dailyXpCap: 1000,
+  freeSetsPerExercise: 5,
+  diminishingFactor: 0.5,
+  minMultiplier: 0.03125,
+  strengthXpDivisor: 60,
+  cardioXpPerMinute: 3,
+  bodyweightLoadKg: 35,
+  maxSetVolumeKg: 5000,
+  maxWeightKg: 500,
+  maxRepsPerSet: 150,
+  maxSetsPerExercisePerDay: 25,
+  reviewFlagRatio: 0.75,
+  liftCeilings: [
+    ['leg-press', 800], ['hip-thrust', 600], ['deadlift', 550], ['squat', 500],
+    ['bench-press', 350], ['bench', 350], ['row', 300], ['overhead-press', 250],
+    ['shoulder-press', 250], ['pulldown', 200], ['curl', 120], ['lateral-raise', 60],
+  ],
+};
+
+const slugify = (name) =>
+  name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'unnamed';
+
+const ceilingFor = (slug) => {
+  const hit = RULES.liftCeilings.find(([key]) => slug.includes(key));
+  return hit ? hit[1] : null;
+};
+
+const volumeKg = (kind, weightKg, reps) => {
+  if (kind === 'CARDIO') return 0;
+  if (kind === 'BODYWEIGHT') return (weightKg + RULES.bodyweightLoadKg) * reps;
+  return weightKg * reps;
+};
+
+const epleyE1rm = (weightKg, reps) => (reps <= 0 || weightKg <= 0 ? 0 : weightKg * (1 + reps / 30));
+
+const rawSetXp = (kind, volume, durationSec, intensity) =>
+  kind === 'CARDIO'
+    ? (durationSec / 60) * RULES.cardioXpPerMinute * (intensity / 5)
+    : volume / RULES.strengthXpDivisor;
+
+// Sets 1-5 of an exercise pay in full; every set after that halves again.
+const diminishingMultiplier = (setIndex) =>
+  setIndex <= RULES.freeSetsPerExercise
+    ? 1
+    : Math.max(RULES.minMultiplier, RULES.diminishingFactor ** (setIndex - RULES.freeSetsPerExercise));
+
+const xpForNextLevel = (level) => Math.floor(100 * level ** 1.5);
+
+const strengthStat = (p) => Math.min(99, 5 + Math.floor(8 * Math.log10(1 + Math.max(0, p))));
+const staminaStat = (p) => Math.min(99, 5 + Math.floor(8 * Math.log10(1 + Math.max(0, p))));
+const consistencyStat = (activeDays30, streak) =>
+  Math.min(99, 5 + Math.floor(25 * Math.min(1, activeDays30 / 30) ** 1.2) + Math.min(10, Math.floor(streak / 3)));
+
+/**
+ * Resolves setIndex/multiplier/volume/XP for every drafted set from its
+ * position in the current draft, not from whatever was true when it was
+ * added. Deleting a set must renumber everything after it, so these values
+ * are never frozen onto the draft item itself.
+ */
+function deriveDraft(draft, setsToday) {
+  const counts = {};
+  return draft.map((d) => {
+    const slug = slugify(d.exerciseName);
+    const already = setsToday[slug] ?? 0;
+    counts[slug] = (counts[slug] ?? 0) + 1;
+    const setIndex = already + counts[slug];
+    const mult = diminishingMultiplier(setIndex);
+    const volume = volumeKg(d.kind, d.weightKg, d.reps);
+    const raw = rawSetXp(d.kind, volume, d.durationSec, d.intensity);
+    return { ...d, setIndex, mult, volume, raw, net: raw * mult };
+  });
+}
+
+/** Agent 2's gate, client-side. The server runs the identical check and wins. */
+function inspectSet(entry, dailyIndex, bestE1rm) {
+  const rejections = [];
+  const slug = slugify(entry.exerciseName);
+  const volume = volumeKg(entry.kind, entry.weightKg, entry.reps);
+  const ceiling = ceilingFor(slug);
+
+  if (dailyIndex > RULES.maxSetsPerExercisePerDay)
+    rejections.push(`That is set ${dailyIndex} of this exercise today. The limit is ${RULES.maxSetsPerExercisePerDay}.`);
+  if (entry.kind !== 'CARDIO' && entry.reps <= 0) rejections.push('A set needs at least one rep.');
+  if (entry.kind === 'STRENGTH' && entry.weightKg <= 0)
+    rejections.push('A strength set needs a load. Log unloaded work as bodyweight.');
+  if (entry.kind === 'CARDIO' && entry.durationSec <= 0) rejections.push('A cardio entry needs a duration.');
+  if (entry.weightKg < 0) rejections.push('Weight cannot be negative.');
+  if (entry.reps > RULES.maxRepsPerSet)
+    rejections.push(`${entry.reps} reps in one set is not a set, it is a typo (max ${RULES.maxRepsPerSet}).`);
+  if (entry.weightKg > RULES.maxWeightKg)
+    rejections.push(`${entry.weightKg} kg is above the ${RULES.maxWeightKg} kg absolute ceiling.`);
+  if (volume > RULES.maxSetVolumeKg)
+    rejections.push(`${Math.round(volume)} kg of volume in one set exceeds the ${RULES.maxSetVolumeKg} kg cap.`);
+  if (ceiling && entry.weightKg > ceiling)
+    rejections.push(`${entry.weightKg} kg is past the ${ceiling} kg verified limit for this lift.`);
+
+  let flag = null;
+  if (ceiling && entry.weightKg >= ceiling * RULES.reviewFlagRatio)
+    flag = 'Near-elite load, unverified. Earns XP but will not count toward duels.';
+  else if (volume >= RULES.maxSetVolumeKg * RULES.reviewFlagRatio)
+    flag = 'Unusually high single-set volume. Excluded from duel scoring.';
+  else if (entry.kind === 'STRENGTH' && bestE1rm > 0 && epleyE1rm(entry.weightKg, entry.reps) > bestE1rm * 1.25)
+    flag = 'More than 25% above your own best. Excluded from duel scoring.';
+
+  return { rejections, flag };
+}
+
+/* ------------------------------------------------------------- mock data */
+
+const EXERCISES = [
+  { name: 'Bench Press', kind: 'STRENGTH', weight: 70, reps: 8, group: 'Push' },
+  { name: 'Overhead Press', kind: 'STRENGTH', weight: 40, reps: 8, group: 'Push' },
+  { name: 'Back Squat', kind: 'STRENGTH', weight: 100, reps: 5, group: 'Legs' },
+  { name: 'Deadlift', kind: 'STRENGTH', weight: 120, reps: 5, group: 'Pull' },
+  { name: 'Barbell Row', kind: 'STRENGTH', weight: 65, reps: 10, group: 'Pull' },
+  { name: 'Bicep Curl', kind: 'STRENGTH', weight: 15, reps: 12, group: 'Pull' },
+  { name: 'Pull-Up', kind: 'BODYWEIGHT', weight: 0, reps: 8, group: 'Pull' },
+  { name: 'Push-Up', kind: 'BODYWEIGHT', weight: 0, reps: 20, group: 'Push' },
+  { name: 'Run', kind: 'CARDIO', minutes: 30, intensity: 6, group: 'Cardio' },
+  { name: 'Row Erg', kind: 'CARDIO', minutes: 20, intensity: 7, group: 'Cardio' },
+];
+
+const RIVALS = [
+  { id: 'r1', username: 'ironmaeve', display: 'Maeve', archetype: 'BERSERKER', level: 9, str: 27, sta: 22, con: 24, lifetimeXp: 15120, streak: 12, duelsWon: 11 },
+  { id: 'r2', username: 'dax_lifts', display: 'Dax', archetype: 'VANGUARD', level: 8, str: 26, sta: 18, con: 21, lifetimeXp: 12380, streak: 4, duelsWon: 7 },
+  { id: 'r3', username: 'nova_pr', display: 'Nova', archetype: 'RANGER', level: 6, str: 19, sta: 26, con: 22, lifetimeXp: 7940, streak: 9, duelsWon: 5 },
+  { id: 'r4', username: 'kellan88', display: 'Kellan', archetype: 'SENTINEL', level: 5, str: 21, sta: 15, con: 14, lifetimeXp: 5210, streak: 0, duelsWon: 3 },
+  { id: 'r5', username: 'sunny_reps', display: 'Sunny', archetype: 'MONK', level: 4, str: 14, sta: 21, con: 26, lifetimeXp: 3680, streak: 21, duelsWon: 2 },
+];
+
+const METRICS = [
+  { id: 'TOTAL_XP', label: 'Total XP', unit: 'XP' },
+  { id: 'TOTAL_VOLUME', label: 'Volume', unit: 'kg' },
+  { id: 'TOTAL_SETS', label: 'Sets', unit: 'sets' },
+  { id: 'ACTIVE_DAYS', label: 'Active days', unit: 'days' },
+];
+
+const INITIAL_HERO = {
+  username: 'you',
+  display: 'You',
+  archetype: 'VANGUARD',
+  level: 7,
+  currentXp: 410,
+  lifetimeXp: 9840,
+  strPoints: 186,
+  staPoints: 74,
+  streak: 5,
+  activeDays30: 17,
+  bestE1rm: 142.5,
+  dailyXp: 0,
+  duelsWon: 6,
+  duelsLost: 2,
+  duelsDrawn: 1,
+};
+
+const SEED_DUELS = [
+  {
+    id: 'd1', rivalId: 'r1', metric: 'TOTAL_XP', status: 'ACTIVE', stake: 150,
+    days: 7, daysLeft: 3, youScore: 1240, rivalScore: 1380, incoming: false, rated: true,
+    youActiveDays: 4, rivalActiveDays: 4, youVolume: 18400, rivalVolume: 17900,
+  },
+  {
+    id: 'd2', rivalId: 'r2', metric: 'TOTAL_VOLUME', status: 'PENDING', stake: 100,
+    days: 5, daysLeft: 5, youScore: 0, rivalScore: 0, incoming: true, rated: true,
+  },
+  {
+    id: 'd3', rivalId: 'r4', metric: 'TOTAL_SETS', status: 'COMPLETED', stake: 100,
+    days: 7, daysLeft: 0, youScore: 82, rivalScore: 61, incoming: false, rated: true,
+    outcome: 'WIN', note: 'You took it by 21 sets.',
+  },
+];
+
+/* ------------------------------------------------------------ primitives */
+
+const fmt = (n) => Math.round(n).toLocaleString('en-US');
+const fmt1 = (n) => (Math.round(n * 10) / 10).toLocaleString('en-US');
+
+const STAT_META = {
+  str: {
+    label: 'STR', full: 'Strength', color: '#D8322C', Icon: Dumbbell,
+    blurb: 'Tonnage and one-rep maxes', raise: 'Raise it by lifting heavier loads for more total volume.',
+    ceiling: 50, ceilingLabel: 'elite reference',
+  },
+  sta: {
+    label: 'STA', full: 'Stamina', color: '#2C6FD1', Icon: Activity,
+    blurb: 'Time under effort, high reps', raise: 'Raise it with high-rep sets and longer cardio sessions.',
+    ceiling: 50, ceilingLabel: 'elite reference',
+  },
+  con: {
+    label: 'CON', full: 'Consistency', color: '#E9B424', Icon: Flame,
+    blurb: 'Training days in the last 30', raise: 'Raise it by training on more days and keeping the streak alive.',
+    ceiling: 40, ceilingLabel: 'real ceiling',
+  },
+};
+
+function Panel({ children, className = '' }) {
+  return (
+    <div className={`rounded-lg border border-iron-700 bg-iron-800/60 backdrop-blur-sm ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function Eyebrow({ children, className = '' }) {
+  return (
+    <div className={`font-data text-[11px] uppercase tracking-[0.18em] text-chalk-muted ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function PlateButton({ children, onClick, tone = 'ember', disabled, className = '', type = 'button' }) {
+  const tones = {
+    ember: 'bg-plate-ember text-iron-950 hover:bg-[#ff9040]',
+    steel: 'bg-iron-700 text-chalk hover:bg-iron-600',
+    ghost: 'bg-transparent text-chalk-dim hover:text-chalk border border-iron-600',
+    danger: 'bg-plate-str text-chalk hover:bg-[#e8443e]',
+  };
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`font-data uppercase tracking-[0.12em] text-sm font-semibold px-4 py-2.5 rounded transition-colors
+        disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2
+        focus-visible:ring-plate-ember focus-visible:ring-offset-2 focus-visible:ring-offset-iron-900
+        ${tones[tone]} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** The RPG avatar: a figure pressing a loaded bar, breathing on an idle loop. */
+function Avatar({ level, glow, size = 176 }) {
+  const aura = Math.min(1, 0.25 + level / 24);
+  const reduceMotion = useReducedMotion();
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <motion.div
+        aria-hidden
+        className="absolute inset-0 rounded-full"
+        style={{
+          background: `radial-gradient(circle at 50% 55%, rgba(255,122,26,${0.32 * aura}) 0%, rgba(255,122,26,0.06) 45%, transparent 70%)`,
+        }}
+        animate={reduceMotion
+          ? { scale: 1, opacity: glow ? 1 : 0.7 }
+          : { scale: glow ? [1, 1.28, 1] : [1, 1.06, 1], opacity: glow ? [0.8, 1, 0.8] : [0.55, 0.8, 0.55] }}
+        transition={reduceMotion ? { duration: 0 } : { duration: glow ? 0.7 : 4.5, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <svg viewBox="0 0 120 120" className="relative w-full h-full" role="img" aria-label="Your character">
+        <circle cx="60" cy="60" r="52" fill="#1B1F26" stroke="#333945" strokeWidth="1.5" />
+        <circle cx="60" cy="60" r="52" fill="none" stroke="#FF7A1A" strokeWidth="2"
+          strokeDasharray={`${aura * 327} 327`} strokeLinecap="round" transform="rotate(-90 60 60)" opacity="0.9" />
+        <motion.g
+          animate={reduceMotion ? { y: 0 } : { y: [0, -1.6, 0] }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          {/* legs */}
+          <path d="M53 88 L51 104 M67 88 L69 104" stroke="#8B94A3" strokeWidth="5" strokeLinecap="round" />
+          {/* torso */}
+          <path d="M60 52 L60 88" stroke="#B9C0CB" strokeWidth="11" strokeLinecap="round" />
+          {/* head */}
+          <circle cx="60" cy="40" r="9" fill="#F2EFE7" />
+          {/* arms up to the bar */}
+          <path d="M60 60 L44 46 M60 60 L76 46" stroke="#B9C0CB" strokeWidth="5.5" strokeLinecap="round" />
+          {/* barbell */}
+          <rect x="20" y="42" width="80" height="5" rx="2.5" fill="#8B94A3" />
+          <rect x="22" y="33" width="9" height="23" rx="2" fill="#D8322C" />
+          <rect x="33" y="37" width="7" height="15" rx="2" fill="#2C6FD1" />
+          <rect x="89" y="33" width="9" height="23" rx="2" fill="#D8322C" />
+          <rect x="80" y="37" width="7" height="15" rx="2" fill="#2C6FD1" />
+        </motion.g>
+      </svg>
+      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-3 py-1 rounded bg-iron-950 border border-plate-ember/60">
+        <span className="font-display text-plate-ember text-lg leading-none">LV {level}</span>
+      </div>
+    </div>
+  );
+}
+
+function XpBar({ currentXp, needed, flash }) {
+  const pct = Math.max(0, Math.min(100, (currentXp / needed) * 100));
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1.5">
+        <Eyebrow>Experience</Eyebrow>
+        <span className="font-data text-sm text-chalk-dim tabular-nums">
+          {fmt(currentXp)} / {fmt(needed)}
+        </span>
+      </div>
+      <div
+        className="relative h-3 rounded-full bg-iron-950 border border-iron-700 overflow-hidden"
+        role="progressbar"
+        aria-valuenow={Math.round(currentXp)}
+        aria-valuemin={0}
+        aria-valuemax={Math.round(needed)}
+        aria-label="Experience"
+      >
+        <motion.div
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{ background: 'linear-gradient(90deg,#FF7A1A,#E9B424)' }}
+          initial={false}
+          animate={{ width: `${pct}%` }}
+          transition={{ type: 'spring', stiffness: 90, damping: 16 }}
+        />
+        <AnimatePresence>
+          {flash && (
+            <motion.div
+              className="absolute inset-0 bg-chalk"
+              initial={{ opacity: 0.85 }}
+              animate={{ opacity: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.6 }}
+            />
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ statKey, value, delta }) {
+  const { label, full, color, Icon, blurb, raise, ceiling, ceilingLabel } = STAT_META[statKey];
+  return (
+    <Panel className="p-4 relative overflow-hidden">
+      <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: color }} aria-hidden />
+      <div className="flex items-center gap-2 mb-2 pl-1">
+        <Icon size={15} style={{ color }} aria-hidden />
+        <Eyebrow>{label}</Eyebrow>
+      </div>
+      <div className="flex items-end gap-2 pl-1">
+        <motion.span
+          key={value}
+          className="font-display text-4xl leading-none text-chalk tabular-nums"
+          initial={{ y: 8, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+        >
+          {value}
+        </motion.span>
+        <AnimatePresence>
+          {delta > 0 && (
+            <motion.span
+              className="font-data text-sm font-bold mb-1"
+              style={{ color }}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+            >
+              +{delta}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </div>
+      <p className="pl-1 mt-1.5 text-xs text-chalk-muted leading-snug">{full} — {blurb}</p>
+      <p className="pl-1 mt-1 text-xs text-chalk-muted leading-snug">{raise}</p>
+      <div
+        className="mt-3 ml-1 h-1.5 rounded-full bg-iron-950 overflow-hidden"
+        role="progressbar"
+        aria-valuenow={Math.min(value, ceiling)}
+        aria-valuemin={0}
+        aria-valuemax={ceiling}
+        aria-label={`${full} — out of ${ceiling} (${ceilingLabel})`}
+      >
+        <motion.div
+          className="h-full rounded-full"
+          style={{ background: color }}
+          initial={false}
+          animate={{ width: `${Math.min(100, (value / ceiling) * 100)}%` }}
+          transition={{ type: 'spring', stiffness: 120, damping: 18 }}
+        />
+      </div>
+      <p className="pl-1 mt-1 font-data text-[10px] uppercase tracking-[0.14em] text-chalk-muted">
+        out of {ceiling} ({ceilingLabel})
+      </p>
+    </Panel>
+  );
+}
+
+function DailyBudget({ dailyXp }) {
+  const pct = Math.min(100, (dailyXp / RULES.dailyXpCap) * 100);
+  const spent = dailyXp >= RULES.dailyXpCap;
+  return (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <div className="text-right hidden sm:block">
+        <Eyebrow className="leading-none">Daily cap</Eyebrow>
+        <div className={`font-data text-sm tabular-nums ${spent ? 'text-plate-strText' : 'text-chalk-dim'}`}>
+          {fmt(dailyXp)}/{fmt(RULES.dailyXpCap)}
+        </div>
+      </div>
+      <div
+        className="w-16 h-1.5 rounded-full bg-iron-950 border border-iron-700 overflow-hidden shrink-0"
+        role="progressbar"
+        aria-valuenow={Math.round(dailyXp)}
+        aria-valuemin={0}
+        aria-valuemax={RULES.dailyXpCap}
+        aria-label="Daily XP cap"
+      >
+        <motion.div
+          className="h-full"
+          style={{ background: spent ? '#D8322C' : '#E9B424' }}
+          initial={false}
+          animate={{ width: `${pct}%` }}
+          transition={{ type: 'spring', stiffness: 110, damping: 18 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ auth */
+
+function AuthScreen({ onEnter }) {
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({ username: 'you', email: 'you@fitclash.app', password: 'ironforge' });
+  const [error, setError] = useState(null);
+  const isSignUp = mode === 'signup';
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (form.username.trim().length < 3) return setError('Username must be at least 3 characters.');
+    if (form.password.length < 8) return setError('Password must be at least 8 characters.');
+    if (isSignUp && !form.email.includes('@')) return setError('That email does not look right.');
+    setError(null);
+    onEnter(form.username.trim());
+  };
+
+  return (
+    <div className="min-h-full flex items-center justify-center px-4 py-10">
+      <motion.div
+        className="w-full max-w-sm"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        <div className="flex flex-col items-center mb-7">
+          <Avatar level={1} size={124} />
+          <h1 className="font-display text-5xl text-chalk mt-5 tracking-wide">FITCLASH</h1>
+          <p className="text-chalk-muted text-sm mt-1 text-center">
+            Log the session. Earn the stats. Settle it in the arena.
+          </p>
+        </div>
+
+        <Panel className="p-5">
+          <div className="grid grid-cols-2 gap-1 p-1 rounded bg-iron-950 mb-5" role="tablist">
+            {['login', 'signup'].map((m) => (
+              <button
+                key={m}
+                role="tab"
+                aria-selected={mode === m}
+                onClick={() => { setMode(m); setError(null); }}
+                className={`relative font-data uppercase tracking-[0.14em] text-xs font-bold py-2 rounded transition-colors
+                  ${mode === m ? 'text-iron-950' : 'text-chalk-muted hover:text-chalk'}`}
+              >
+                {mode === m && (
+                  <motion.span
+                    layoutId="authPill"
+                    className="absolute inset-0 rounded bg-plate-ember"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative">{m === 'login' ? 'Log in' : 'Sign up'}</span>
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={submit} className="flex flex-col gap-3">
+            <Field id="auth-username" label="Username" value={form.username}
+              onChange={(v) => setForm({ ...form, username: v })} />
+            <AnimatePresence initial={false}>
+              {isSignUp && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <Field id="auth-email" label="Email" type="email" value={form.email}
+                    onChange={(v) => setForm({ ...form, email: v })} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <Field id="auth-password" label="Password" type="password" value={form.password}
+              onChange={(v) => setForm({ ...form, password: v })} />
+
+            {error && (
+              <p className="flex items-start gap-1.5 text-xs text-plate-strText">
+                <AlertTriangle size={14} className="mt-px shrink-0" aria-hidden /> {error}
+              </p>
+            )}
+
+            <PlateButton type="submit" className="mt-1 w-full">
+              {isSignUp ? 'Forge character' : 'Enter the gym'}
+            </PlateButton>
+          </form>
+        </Panel>
+
+        <p className="text-center text-xs text-chalk-muted mt-4">
+          Prototype build — any credentials work, nothing leaves this page.
+        </p>
+      </motion.div>
+    </div>
+  );
+}
+
+function Field({ id, label, value, onChange, type = 'text' }) {
+  return (
+    <label htmlFor={id} className="block">
+      <span className="font-data text-[11px] uppercase tracking-[0.18em] text-chalk-muted">{label}</span>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1 w-full rounded bg-iron-950 border border-iron-700 px-3 py-2.5 text-chalk min-h-[44px]
+          placeholder:text-chalk-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-plate-ember
+          focus-visible:ring-offset-2 focus-visible:ring-offset-iron-900 focus:border-plate-ember transition-colors"
+      />
+    </label>
+  );
+}
+
+/* ------------------------------------------------------------- dashboard */
+
+function Dashboard({ hero, stats, statDelta, xpFlash, history, duels, rivalById, onGoLog }) {
+  const needed = xpForNextLevel(hero.level);
+  const activeDuels = duels.filter((d) => d.status === 'ACTIVE');
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Panel className="p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+          <Avatar level={hero.level} glow={xpFlash} />
+          <div className="flex-1 w-full min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h2 className="font-display text-3xl text-chalk leading-none">{hero.display}</h2>
+              <span className="font-data text-xs uppercase tracking-[0.18em] px-2 py-1 rounded bg-iron-700 text-chalk-dim">
+                {hero.archetype}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-4 mt-2 mb-4 text-sm text-chalk-dim">
+              <span className="inline-flex items-center gap-1.5">
+                <Flame size={14} className="text-plate-con" aria-hidden />
+                <span className="tabular-nums">{hero.streak}</span> day streak
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Trophy size={14} className="text-plate-ember" aria-hidden />
+                <span className="tabular-nums">{hero.duelsWon}W</span>
+                <span className="text-chalk-muted tabular-nums">{hero.duelsLost}L {hero.duelsDrawn}D</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <TrendingUp size={14} className="text-plate-sta" aria-hidden />
+                <span className="tabular-nums">{fmt1(hero.bestE1rm)} kg</span> best e1RM
+              </span>
+            </div>
+            <XpBar currentXp={hero.currentXp} needed={needed} flash={xpFlash} />
+            <p className="mt-2 text-xs text-chalk-muted">
+              {fmt(needed - hero.currentXp)} XP to level {hero.level + 1} · curve is 100 × N<sup>1.5</sup>
+            </p>
+          </div>
+        </div>
+      </Panel>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {['str', 'sta', 'con'].map((k) => (
+          <StatCard key={k} statKey={k} value={stats[k]} delta={statDelta[k]} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Panel className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <Eyebrow>Recent sessions</Eyebrow>
+            <button onClick={onGoLog} className="font-data text-xs uppercase tracking-[0.14em] text-plate-ember hover:underline">
+              Log a session
+            </button>
+          </div>
+          {history.length === 0 ? (
+            <p className="text-sm text-chalk-muted">Nothing logged yet. The bar is not going to lift itself.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-iron-700">
+              {history.slice(0, 5).map((h) => (
+                <motion.li
+                  key={h.id}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-chalk truncate">{h.title}</p>
+                    <p className="font-data text-xs text-chalk-muted tabular-nums">
+                      {h.when} · {h.sets} sets · {fmt(h.volume)} kg
+                    </p>
+                  </div>
+                  <span className="font-data font-bold text-plate-ember tabular-nums shrink-0 ml-3">
+                    +{fmt(h.xp)}
+                  </span>
+                </motion.li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel className="p-5">
+          <Eyebrow className="mb-4">Live duels</Eyebrow>
+          {activeDuels.length === 0 ? (
+            <p className="text-sm text-chalk-muted">No duel running. The arena is one tab away.</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {activeDuels.map((d) => (
+                <DuelBars key={d.id} duel={d} rival={rivalById[d.rivalId]} compact />
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- logger */
+
+function Logger({ hero, setsToday, draft, setDraft, onBank, notify }) {
+  const [picked, setPicked] = useState(EXERCISES[0]);
+  const [weight, setWeight] = useState(EXERCISES[0].weight);
+  const [reps, setReps] = useState(EXERCISES[0].reps);
+  const [minutes, setMinutes] = useState(30);
+  const [intensity, setIntensity] = useState(6);
+
+  const isCardio = picked.kind === 'CARDIO';
+
+  const choose = (ex) => {
+    setPicked(ex);
+    if (ex.kind === 'CARDIO') {
+      setMinutes(ex.minutes ?? 30);
+      setIntensity(ex.intensity ?? 6);
+    } else {
+      setWeight(ex.weight ?? 0);
+      setReps(ex.reps ?? 8);
+    }
+  };
+
+  // How many sets of the picked exercise are already logged today, before
+  // counting anything still sitting in the draft.
+  const alreadyLogged = useMemo(
+    () => setsToday[slugify(picked.name)] ?? 0,
+    [picked, setsToday],
+  );
+
+  // The set index this entry would take today, counting what is already drafted.
+  const nextIndex = useMemo(() => {
+    const slug = slugify(picked.name);
+    const drafted = draft.filter((d) => slugify(d.exerciseName) === slug).length;
+    return alreadyLogged + drafted + 1;
+  }, [picked, draft, alreadyLogged]);
+
+  const candidate = {
+    exerciseName: picked.name,
+    kind: picked.kind,
+    weightKg: isCardio ? 0 : Number(weight) || 0,
+    reps: isCardio ? 0 : Number(reps) || 0,
+    durationSec: isCardio ? (Number(minutes) || 0) * 60 : 0,
+    intensity: isCardio ? Number(intensity) || 5 : 5,
+  };
+
+  const preview = useMemo(() => {
+    const vol = volumeKg(candidate.kind, candidate.weightKg, candidate.reps);
+    const raw = rawSetXp(candidate.kind, vol, candidate.durationSec, candidate.intensity);
+    const mult = diminishingMultiplier(nextIndex);
+    return { vol, raw, mult, net: raw * mult };
+  }, [candidate.kind, candidate.weightKg, candidate.reps, candidate.durationSec, candidate.intensity, nextIndex]);
+
+  const addSet = () => {
+    const { rejections, flag } = inspectSet(candidate, nextIndex, hero.bestE1rm);
+    if (rejections.length) {
+      notify('reject', rejections.join(' '));
+      return;
+    }
+    const mult = diminishingMultiplier(nextIndex);
+    setDraft((d) => [...d, { ...candidate, id: `s${Date.now()}${d.length}`, flag }]);
+    if (flag) notify('flag', flag);
+    else if (mult < 1) notify('info', `Set ${nextIndex} of ${picked.name} today — XP reduced to ${Math.round(mult * 100)}%.`);
+  };
+
+  // Every set's index/multiplier/XP is derived from its position in the
+  // draft right now, so deleting one renumbers the rest instead of leaving
+  // stale values behind.
+  const derivedDraft = useMemo(() => deriveDraft(draft, setsToday), [draft, setsToday]);
+
+  const draftTotals = useMemo(() => {
+    const net = derivedDraft.reduce((s, d) => s + d.net, 0);
+    const raw = derivedDraft.reduce((s, d) => s + d.raw, 0);
+    const remaining = Math.max(0, RULES.dailyXpCap - hero.dailyXp);
+    return { raw, net, granted: Math.min(Math.round(net), remaining), remaining };
+  }, [derivedDraft, hero.dailyXp]);
+
+  const capped = draftTotals.granted < Math.round(draftTotals.net);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start">
+      <div className="flex flex-col gap-5">
+        <Panel className="p-5">
+          <Eyebrow className="mb-3">Pick a movement</Eyebrow>
+          <div className="flex flex-wrap gap-2">
+            {EXERCISES.map((ex) => {
+              const on = ex.name === picked.name;
+              return (
+                <button
+                  key={ex.name}
+                  onClick={() => choose(ex)}
+                  className={`font-data text-xs uppercase tracking-[0.1em] px-3 py-2 min-h-[44px] rounded border
+                    transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-plate-ember
+                    focus-visible:ring-offset-2 focus-visible:ring-offset-iron-900
+                    ${on
+                      ? 'border-plate-ember bg-plate-ember/15 text-plate-ember'
+                      : 'border-iron-700 text-chalk-dim hover:border-iron-600 hover:text-chalk'}`}
+                >
+                  {ex.name}
+                </button>
+              );
+            })}
+          </div>
+          {alreadyLogged > 0 && (
+            <p className="mt-3 text-xs text-chalk-muted">
+              {alreadyLogged} {alreadyLogged === 1 ? 'set' : 'sets'} of {picked.name} already logged today.
+            </p>
+          )}
+        </Panel>
+
+        <Panel className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <Eyebrow>{picked.name}</Eyebrow>
+            <span className="font-data text-[11px] uppercase tracking-[0.14em] text-chalk-muted">
+              Set {nextIndex} today
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {isCardio ? (
+              <>
+                <Stepper id="log-minutes" label="Minutes" value={minutes} step={5} min={1} max={240} onChange={setMinutes} />
+                <Stepper id="log-intensity" label="Intensity" value={intensity} step={1} min={1} max={10} onChange={setIntensity} />
+              </>
+            ) : (
+              <>
+                <Stepper id="log-weight" label="Weight (kg)" value={weight} step={2.5} min={0} max={600}
+                  onChange={setWeight} suffix={picked.kind === 'BODYWEIGHT' ? 'added' : ''} />
+                <Stepper id="log-reps" label="Reps" value={reps} step={1} min={0} max={200} onChange={setReps} />
+              </>
+            )}
+          </div>
+
+          <div className="mt-5 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+            <div className="flex items-baseline gap-3">
+              <div>
+                <Eyebrow className="leading-none">This set pays</Eyebrow>
+                <div className="flex items-baseline gap-2">
+                  <motion.span
+                    key={Math.round(preview.net * 10)}
+                    className="font-display text-3xl text-plate-ember tabular-nums leading-none"
+                    initial={{ scale: 0.92, opacity: 0.4 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                  >
+                    {fmt1(preview.net)}
+                  </motion.span>
+                  <span className="font-data text-sm text-chalk-muted">XP</span>
+                  {preview.mult < 1 && (
+                    <span className="font-data text-xs px-1.5 py-0.5 rounded bg-plate-str/20 text-plate-str">
+                      ×{preview.mult.toFixed(preview.mult < 0.1 ? 3 : 2)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {!isCardio && (
+                <div className="pl-3 border-l border-iron-700">
+                  <Eyebrow className="leading-none">Volume</Eyebrow>
+                  <div className="font-data text-lg text-chalk-dim tabular-nums">{fmt(preview.vol)} kg</div>
+                </div>
+              )}
+            </div>
+            <PlateButton onClick={addSet} className="sm:w-auto w-full">
+              <span className="inline-flex items-center gap-1.5"><Plus size={15} aria-hidden /> Add set</span>
+            </PlateButton>
+          </div>
+
+          {preview.mult < 1 && (
+            <p className="mt-3 flex items-start gap-1.5 text-xs text-plate-con">
+              <AlertTriangle size={13} className="mt-px shrink-0" aria-hidden />
+              Past {RULES.freeSetsPerExercise} sets of one movement in a day, each further set pays half the last.
+            </p>
+          )}
+        </Panel>
+      </div>
+
+      <Panel className="p-5 lg:sticky lg:top-24">
+        <div className="flex items-center justify-between mb-3">
+          <Eyebrow>Session</Eyebrow>
+          <span className="font-data text-xs text-chalk-muted tabular-nums">{draft.length} sets</span>
+        </div>
+
+        <div className="max-h-[280px] overflow-y-auto -mx-1 px-1">
+          <AnimatePresence initial={false}>
+            {draft.length === 0 && (
+              <motion.p key="empty" className="text-sm text-chalk-muted py-6 text-center" exit={{ opacity: 0 }}>
+                Add your first set to start the session.
+              </motion.p>
+            )}
+            {derivedDraft.map((d) => (
+              <motion.div
+                key={d.id}
+                layout
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20, height: 0 }}
+                className="flex items-center gap-2 py-2 border-b border-iron-700 last:border-0"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-chalk truncate">
+                    {d.exerciseName}
+                    {d.flag && <Shield size={12} className="inline ml-1.5 -mt-0.5 text-plate-con" aria-label="Flagged for verification" />}
+                  </p>
+                  <p className="font-data text-xs text-chalk-muted tabular-nums">
+                    {d.kind === 'CARDIO'
+                      ? `${d.durationSec / 60} min · intensity ${d.intensity}`
+                      : `${fmt1(d.weightKg)} kg × ${d.reps} · set ${d.setIndex}`}
+                  </p>
+                </div>
+                <span className="font-data text-sm text-plate-ember tabular-nums">+{fmt1(d.net)}</span>
+                <button
+                  onClick={() => setDraft((list) => list.filter((x) => x.id !== d.id))}
+                  aria-label={`Remove ${d.exerciseName}`}
+                  className="shrink-0 p-[14.5px] -m-[14.5px] text-chalk-muted hover:text-plate-str
+                    transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-plate-ember
+                    focus-visible:ring-inset rounded"
+                >
+                  <X size={15} aria-hidden />
+                </button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-iron-700 flex flex-col gap-2">
+          <Row label="Raw XP" value={fmt1(draftTotals.raw)} />
+          <Row label="After diminishing returns" value={fmt1(draftTotals.net)} />
+          <Row label="Daily budget left" value={fmt(draftTotals.remaining)} tone={draftTotals.remaining === 0 ? 'bad' : 'dim'} />
+          <div className="flex items-baseline justify-between pt-2 mt-1 border-t border-iron-700">
+            <span className="font-data uppercase tracking-[0.14em] text-xs text-chalk">Banked</span>
+            <span className="font-display text-2xl text-plate-ember tabular-nums">{fmt(draftTotals.granted)}</span>
+          </div>
+          {capped && (
+            <p className="flex items-start gap-1.5 text-xs text-plate-strText">
+              <AlertTriangle size={13} className="mt-px shrink-0" aria-hidden />
+              Daily cap reached. XP past {fmt(RULES.dailyXpCap)} is not banked — it resets at midnight.
+            </p>
+          )}
+          <PlateButton onClick={onBank} disabled={draft.length === 0} className="mt-2 w-full">
+            <span className="inline-flex items-center gap-1.5"><Zap size={15} aria-hidden /> Bank session</span>
+          </PlateButton>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function Row({ label, value, tone = 'dim' }) {
+  const colors = { dim: 'text-chalk-dim', bad: 'text-plate-strText' };
+  return (
+    <div className="flex items-baseline justify-between text-sm">
+      <span className="text-chalk-muted">{label}</span>
+      <span className={`font-data tabular-nums ${colors[tone]}`}>{value}</span>
+    </div>
+  );
+}
+
+function Stepper({ id, label, value, onChange, step = 1, min = 0, max = 999, suffix }) {
+  const bump = (dir) => onChange(Math.max(min, Math.min(max, Number(value) + dir * step)));
+  return (
+    <div>
+      <label htmlFor={id} className="font-data text-[11px] uppercase tracking-[0.18em] text-chalk-muted">
+        {label}{suffix ? ` · ${suffix}` : ''}
+      </label>
+      <div className="mt-1 flex items-stretch rounded border border-iron-700 overflow-hidden bg-iron-950">
+        <button onClick={() => bump(-1)} aria-label={`Decrease ${label}`}
+          className="min-w-[44px] min-h-[44px] grid place-items-center text-chalk-muted hover:text-chalk
+            hover:bg-iron-800 transition-colors focus:outline-none focus-visible:ring-2
+            focus-visible:ring-plate-ember focus-visible:ring-inset">
+          <Minus size={14} aria-hidden />
+        </button>
+        <input
+          id={id}
+          type="number"
+          value={value}
+          onChange={(e) => {
+            const raw = e.target.value === '' ? 0 : Number(e.target.value);
+            onChange(Math.max(min, Math.min(max, raw)));
+          }}
+          className="flex-1 w-full min-w-0 bg-transparent text-center font-display text-2xl text-chalk py-2
+            tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-plate-ember
+            focus-visible:ring-offset-2 focus-visible:ring-offset-iron-900 [appearance:textfield]
+            [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        <button onClick={() => bump(1)} aria-label={`Increase ${label}`}
+          className="min-w-[44px] min-h-[44px] grid place-items-center text-chalk-muted hover:text-chalk
+            hover:bg-iron-800 transition-colors focus:outline-none focus-visible:ring-2
+            focus-visible:ring-plate-ember focus-visible:ring-inset">
+          <Plus size={14} aria-hidden />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------- duels */
+
+function DuelBars({ duel, rival, compact }) {
+  const metric = METRICS.find((m) => m.id === duel.metric);
+  const top = Math.max(duel.youScore, duel.rivalScore, 1);
+  const leading = duel.youScore >= duel.rivalScore;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-data text-xs uppercase tracking-[0.14em] text-chalk-dim">
+          vs {rival.display} · {metric.label}
+        </span>
+        {duel.status === 'ACTIVE' && (
+          <span className="font-data text-xs text-chalk-muted tabular-nums inline-flex items-center gap-1">
+            <Timer size={12} aria-hidden /> {duel.daysLeft}d left
+          </span>
+        )}
+      </div>
+      <Bar label="You" value={duel.youScore} max={top} color={leading ? '#FF7A1A' : '#4A5261'} unit={metric.unit} />
+      <div className="h-1.5" />
+      <Bar label={rival.display} value={duel.rivalScore} max={top} color={!leading ? '#D8322C' : '#4A5261'} unit={metric.unit} />
+      {!compact && duel.note && <p className="mt-2 text-xs text-chalk-muted">{duel.note}</p>}
+    </div>
+  );
+}
+
+function Bar({ label, value, max, color, unit }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-14 shrink-0 font-data text-xs text-chalk-dim truncate">{label}</span>
+      <div
+        className="flex-1 h-2.5 rounded-full bg-iron-950 border border-iron-700 overflow-hidden"
+        role="progressbar"
+        aria-valuenow={Math.round(value)}
+        aria-valuemin={0}
+        aria-valuemax={Math.round(max)}
+        aria-label={`${label} ${unit}`}
+      >
+        <motion.div
+          className="h-full rounded-full"
+          style={{ background: color }}
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.max(3, (value / max) * 100)}%` }}
+          transition={{ type: 'spring', stiffness: 80, damping: 18 }}
+        />
+      </div>
+      <span className="w-20 shrink-0 text-right font-data text-xs text-chalk tabular-nums">
+        {fmt(value)} <span className="text-chalk-muted">{unit}</span>
+      </span>
+    </div>
+  );
+}
+
+function DuelsHub({ duels, rivalById, onChallenge, onRespond, onSettle }) {
+  const [target, setTarget] = useState(RIVALS[0].id);
+  const [metric, setMetric] = useState('TOTAL_XP');
+  const [stake, setStake] = useState(100);
+  const [days, setDays] = useState(7);
+
+  const busy = new Set(duels.filter((d) => d.status === 'ACTIVE' || d.status === 'PENDING').map((d) => d.rivalId));
+  const available = RIVALS.filter((r) => !busy.has(r.id));
+
+  // Keep the selected opponent in sync with who is actually selectable --
+  // if the current target is busy (or was never valid), fall back to the
+  // first available rival so "Send challenge" never fires at a mismatch
+  // between the dropdown's displayed value and the stored target.
+  useEffect(() => {
+    if (available.length === 0) return;
+    if (!available.some((r) => r.id === target)) setTarget(available[0].id);
+  }, [available, target]);
+  const ordered = ['PENDING', 'ACTIVE', 'COMPLETED', 'DECLINED']
+    .flatMap((s) => duels.filter((d) => d.status === s));
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 items-start">
+      <div className="flex flex-col gap-4">
+        {ordered.map((duel) => {
+          const rival = rivalById[duel.rivalId];
+          const metricMeta = METRICS.find((m) => m.id === duel.metric);
+          return (
+            <motion.div key={duel.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <Panel className="p-5">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded shrink-0 bg-iron-700 grid place-items-center font-display text-xl text-chalk">
+                      {rival.display[0]}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-display text-xl text-chalk leading-tight truncate">{rival.display}</p>
+                      <p className="font-data text-xs text-chalk-muted">
+                        @{rival.username} · LV {rival.level} · {metricMeta.label} · {duel.stake} XP stake
+                      </p>
+                    </div>
+                  </div>
+                  <StatusPill duel={duel} />
+                </div>
+
+                {duel.status !== 'PENDING' && duel.status !== 'DECLINED' && <DuelBars duel={duel} rival={rival} />}
+
+                {duel.status === 'PENDING' && (
+                  <p className="text-sm text-chalk-dim mb-4">
+                    {duel.incoming
+                      ? `${rival.display} challenged you to ${duel.days} days of ${metricMeta.label.toLowerCase()}.`
+                      : `Waiting for ${rival.display} to accept.`}
+                  </p>
+                )}
+
+                {duel.status === 'DECLINED' && (
+                  <p className="text-sm text-chalk-dim mb-4">Declined. No duel was started.</p>
+                )}
+
+                {duel.status === 'COMPLETED' && duel.note && (
+                  <p className="mt-3 text-xs text-chalk-muted">{duel.note}</p>
+                )}
+
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {duel.status === 'PENDING' && duel.incoming && (
+                    <>
+                      <PlateButton onClick={() => onRespond(duel.id, true)}>
+                        <span className="inline-flex items-center gap-1.5"><Check size={14} aria-hidden /> Accept</span>
+                      </PlateButton>
+                      <PlateButton tone="ghost" onClick={() => onRespond(duel.id, false)}>Decline</PlateButton>
+                    </>
+                  )}
+                  {duel.status === 'PENDING' && !duel.incoming && (
+                    <PlateButton tone="ghost" onClick={() => onRespond(duel.id, false)}>Withdraw</PlateButton>
+                  )}
+                  {duel.status === 'ACTIVE' && (
+                    <div className="flex flex-col gap-1.5">
+                      <PlateButton tone="steel" onClick={() => onSettle(duel.id)}>
+                        <span className="inline-flex items-center gap-1.5"><Swords size={14} aria-hidden /> Settle now (demo)</span>
+                      </PlateButton>
+                      <p className="text-xs text-chalk-muted">
+                        Shortcut for this demo — a real duel resolves on its own when the window closes.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </Panel>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      <Panel className="p-5 lg:sticky lg:top-24">
+        <Eyebrow className="mb-4">Throw down</Eyebrow>
+
+        <label htmlFor="duel-target" className="font-data text-[11px] uppercase tracking-[0.18em] text-chalk-muted">
+          Opponent
+        </label>
+        <select
+          id="duel-target"
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          disabled={available.length === 0}
+          className="mt-1 mb-4 w-full rounded bg-iron-950 border border-iron-700 px-3 py-2.5 text-chalk min-h-[44px]
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-plate-ember focus-visible:ring-offset-2
+            focus-visible:ring-offset-iron-900 focus:border-plate-ember disabled:opacity-50"
+        >
+          {available.map((r) => (
+            <option key={r.id} value={r.id}>{r.display} — LV {r.level}</option>
+          ))}
+          {available.length === 0 && <option>Every friend is already in a duel</option>}
+        </select>
+
+        <Eyebrow className="mb-2">Metric</Eyebrow>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {METRICS.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setMetric(m.id)}
+              className={`font-data text-xs uppercase tracking-[0.1em] py-2 min-h-[44px] rounded border transition-colors
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-plate-ember focus-visible:ring-offset-2
+                focus-visible:ring-offset-iron-900
+                ${metric === m.id
+                  ? 'border-plate-ember bg-plate-ember/15 text-plate-ember'
+                  : 'border-iron-700 text-chalk-dim hover:text-chalk'}`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <Stepper id="duel-stake" label="Stake (XP)" value={stake} step={25} min={0} max={250} onChange={setStake} />
+          <Stepper id="duel-days" label="Days" value={days} step={1} min={1} max={30} onChange={setDays} />
+        </div>
+
+        <PlateButton
+          className="w-full"
+          disabled={available.length === 0}
+          onClick={() => onChallenge({ rivalId: target, metric, stake, days })}
+        >
+          <span className="inline-flex items-center gap-1.5"><Swords size={15} aria-hidden /> Send challenge</span>
+        </PlateButton>
+
+        <p className="mt-3 text-xs text-chalk-muted leading-relaxed">
+          Ties break on active days, then volume, then CON. Duel XP is exempt from the daily cap,
+          but only three rated duels settle per week.
+        </p>
+      </Panel>
+    </div>
+  );
+}
+
+function StatusPill({ duel }) {
+  const map = {
+    PENDING: ['Pending', 'bg-iron-700 text-chalk-dim'],
+    ACTIVE: ['Live', 'bg-plate-ember/20 text-plate-ember'],
+    COMPLETED: duel.outcome === 'WIN'
+      ? ['Won', 'bg-plate-jade/20 text-plate-jade']
+      : duel.outcome === 'DRAW'
+        ? ['Draw', 'bg-iron-700 text-chalk-dim']
+        : ['Lost', 'bg-plate-str/20 text-plate-str'],
+    DECLINED: ['Declined', 'bg-iron-700 text-chalk-dim'],
+  };
+  const [label, cls] = map[duel.status] ?? ['—', 'bg-iron-700 text-chalk-dim'];
+  return (
+    <span className={`shrink-0 font-data text-[11px] uppercase tracking-[0.14em] px-2 py-1 rounded ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+/* ----------------------------------------------------------- leaderboard */
+
+function Leaderboard({ hero, stats }) {
+  const rows = useMemo(() => {
+    const you = {
+      id: 'you', username: hero.username, display: hero.display, archetype: hero.archetype,
+      level: hero.level, lifetimeXp: hero.lifetimeXp, str: stats.str, sta: stats.sta,
+      con: stats.con, streak: hero.streak, duelsWon: hero.duelsWon, isYou: true,
+    };
+    return [...RIVALS, you].sort((a, b) => b.level - a.level || b.lifetimeXp - a.lifetimeXp);
+  }, [hero, stats]);
+
+  return (
+    <Panel className="overflow-hidden">
+      <div className="px-5 py-4 border-b border-iron-700 flex items-center gap-2">
+        <Crown size={16} className="text-plate-con" aria-hidden />
+        <Eyebrow>Guild standings</Eyebrow>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[540px]">
+          <thead>
+            <tr className="text-left">
+              {['#', 'Fighter', 'LV', 'STR', 'STA', 'CON', 'Streak', 'Wins'].map((h) => (
+                <th key={h} className="font-data text-[11px] uppercase tracking-[0.16em] text-chalk-muted font-medium px-3 py-2 first:pl-5 last:pr-5">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <motion.tr
+                key={r.id}
+                layout
+                transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+                className={`border-t border-iron-700 ${r.isYou ? 'bg-plate-ember/10' : ''}`}
+              >
+                <td className="px-3 pl-5 py-3 font-display text-xl tabular-nums text-chalk-dim">
+                  {i === 0 ? <span className="text-plate-con">1</span> : i + 1}
+                </td>
+                <td className="px-3 py-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`truncate ${r.isYou ? 'text-plate-ember font-semibold' : 'text-chalk'}`}>
+                      {r.display}
+                    </span>
+                    <span className="font-data text-[10px] uppercase tracking-[0.14em] text-chalk-muted hidden sm:inline">
+                      {r.archetype}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-3 py-3 font-data tabular-nums text-chalk">{r.level}</td>
+                <td className="px-3 py-3 font-data tabular-nums text-plate-strText">{r.str}</td>
+                <td className="px-3 py-3 font-data tabular-nums text-plate-staText">{r.sta}</td>
+                <td className="px-3 py-3 font-data tabular-nums" style={{ color: STAT_META.con.color }}>{r.con}</td>
+                <td className="px-3 py-3 font-data tabular-nums text-chalk-dim">{r.streak}</td>
+                <td className="px-3 pr-5 py-3 font-data tabular-nums text-chalk-dim">{r.duelsWon}</td>
+              </motion.tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+/* --------------------------------------------------------------- overlays */
+
+function LevelUpOverlay({ levelUp, onDone }) {
+  const reduceMotion = useReducedMotion();
+  const dismissRef = useRef(null);
+  const restoreFocusRef = useRef(null);
+
+  useEffect(() => {
+    if (!levelUp) return undefined;
+    const t = setTimeout(onDone, 2600);
+    return () => clearTimeout(t);
+  }, [levelUp, onDone]);
+
+  // Move focus into the dialog on open, restore it to whatever had focus
+  // beforehand on close, and let Escape dismiss it like any other dialog.
+  useEffect(() => {
+    if (!levelUp) return undefined;
+    restoreFocusRef.current = document.activeElement;
+    dismissRef.current?.focus();
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onDone();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      if (restoreFocusRef.current instanceof HTMLElement) restoreFocusRef.current.focus();
+    };
+  }, [levelUp, onDone]);
+
+  return (
+    <AnimatePresence>
+      {levelUp && (
+        <motion.div
+          className="fixed inset-0 z-50 grid place-items-center px-4"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Level up"
+        >
+          <div className="absolute inset-0 bg-iron-950/85" onClick={onDone} aria-hidden="true" />
+          <motion.div
+            className="relative text-center"
+            initial={{ scale: 0.7, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 16 }}
+          >
+            {!reduceMotion && [0, 1, 2].map((i) => (
+              <motion.div
+                key={i}
+                aria-hidden
+                className="absolute left-1/2 top-1/2 rounded-full border-2 border-plate-ember"
+                style={{ width: 160, height: 160, marginLeft: -80, marginTop: -80 }}
+                initial={{ scale: 0.4, opacity: 0.9 }}
+                animate={{ scale: 2.6, opacity: 0 }}
+                transition={{ duration: 1.6, delay: i * 0.22, repeat: Infinity }}
+              />
+            ))}
+            <Sparkles size={30} className="text-plate-con mx-auto mb-2 relative" aria-hidden />
+            <p className="font-data uppercase tracking-[0.3em] text-plate-con text-sm relative">Level up</p>
+            <p className="font-display text-7xl sm:text-8xl text-chalk leading-none relative">
+              {levelUp.newLevel}
+            </p>
+            <p className="text-chalk-dim mt-2 relative">
+              {levelUp.gained > 1 ? `${levelUp.gained} levels in one session.` : 'The bar respects you a little more.'}
+            </p>
+            <p className="sr-only" role="alert" aria-live="assertive">
+              Level up. You reached level {levelUp.newLevel}.
+              {levelUp.gained > 1 ? ` ${levelUp.gained} levels in one session.` : ''}
+            </p>
+            <button
+              ref={dismissRef}
+              type="button"
+              onClick={onDone}
+              className="relative mt-4 min-w-[44px] min-h-[44px] px-5 py-2 rounded font-data uppercase
+                tracking-[0.14em] text-sm font-semibold bg-plate-ember text-iron-950 hover:bg-[#ff9040]
+                transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-chalk
+                focus-visible:ring-offset-2 focus-visible:ring-offset-iron-950"
+            >
+              Continue
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function Toasts({ toasts, dismiss }) {
+  const tones = {
+    reject: { cls: 'border-plate-str bg-plate-str/15 text-chalk', Icon: X },
+    flag: { cls: 'border-plate-con bg-plate-con/15 text-chalk', Icon: Shield },
+    info: { cls: 'border-iron-600 bg-iron-800 text-chalk-dim', Icon: AlertTriangle },
+    good: { cls: 'border-plate-jade bg-plate-jade/15 text-chalk', Icon: Check },
+  };
+  return (
+    // This wrapper never unmounts, unlike the toasts inside it, so a screen
+    // reader's live-region announcement actually fires for each one.
+    <div
+      className="fixed z-[60] bottom-4 left-1/2 -translate-x-1/2 w-[min(28rem,calc(100vw-2rem))] flex flex-col gap-2"
+      role="status"
+      aria-live="polite"
+    >
+      <AnimatePresence initial={false}>
+        {toasts.map((t) => {
+          const { cls, Icon } = tones[t.tone] ?? tones.info;
+          return (
+            <motion.div
+              key={t.id}
+              layout
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.97 }}
+              className={`flex items-start gap-2 rounded border px-3 py-2.5 text-sm shadow-lg ${cls}`}
+            >
+              <Icon size={15} className="mt-0.5 shrink-0" aria-hidden />
+              <span className="flex-1">{t.message}</span>
+              <button
+                type="button"
+                onClick={() => dismiss(t.id)}
+                aria-label="Dismiss"
+                className="shrink-0 p-[14.5px] -m-[14.5px] -mr-2 opacity-70 hover:opacity-100 transition-opacity
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-plate-ember focus-visible:ring-inset rounded"
+              >
+                <X size={13} aria-hidden />
+              </button>
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ root */
+
+const TABS = [
+  { id: 'dashboard', label: 'Character', Icon: Shield },
+  { id: 'log', label: 'Log', Icon: Dumbbell },
+  { id: 'duels', label: 'Duels', Icon: Swords },
+  { id: 'board', label: 'Ranks', Icon: Trophy },
+];
+
+function FitClash() {
+  const [signedIn, setSignedIn] = useState(false);
+  const [tab, setTab] = useState('dashboard');
+  const [hero, setHero] = useState(INITIAL_HERO);
+  const [setsToday, setSetsToday] = useState({ 'bench-press': 2 });
+  const [draft, setDraft] = useState([]);
+  const [duels, setDuels] = useState(SEED_DUELS);
+  const [history, setHistory] = useState([
+    { id: 'h1', title: 'Push day', when: 'Yesterday', sets: 14, volume: 9640, xp: 640 },
+    { id: 'h2', title: 'Intervals', when: '2 days ago', sets: 4, volume: 0, xp: 210 },
+    { id: 'h3', title: 'Pull day', when: '3 days ago', sets: 16, volume: 11280, xp: 1000 },
+  ]);
+  const [toasts, setToasts] = useState([]);
+  const [levelUp, setLevelUp] = useState(null);
+  const [xpFlash, setXpFlash] = useState(false);
+  const [statDelta, setStatDelta] = useState({ str: 0, sta: 0, con: 0 });
+  const toastId = useRef(0);
+  const statDeltaTimer = useRef(null);
+
+  const rivalById = useMemo(() => Object.fromEntries(RIVALS.map((r) => [r.id, r])), []);
+
+  const stats = useMemo(() => ({
+    str: strengthStat(hero.strPoints),
+    sta: staminaStat(hero.staPoints),
+    con: consistencyStat(hero.activeDays30, hero.streak),
+  }), [hero.strPoints, hero.staPoints, hero.activeDays30, hero.streak]);
+
+  const notify = useCallback((tone, message) => {
+    const id = ++toastId.current;
+    setToasts((t) => [...t.slice(-2), { id, tone, message }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
+  }, []);
+
+  const dismiss = useCallback((id) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+
+  // Rivals keep training while you read the page - active duels stay alive.
+  // Gated on signedIn so seeded scores do not creep while the login form is up.
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    const timer = setInterval(() => {
+      setDuels((list) => list.map((d) => (d.status === 'ACTIVE'
+        ? { ...d, rivalScore: d.rivalScore + Math.round((d.metric === 'TOTAL_VOLUME' ? 140 : 6) * Math.random()) }
+        : d)));
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [signedIn]);
+
+  /** The full award pipeline, exactly as WorkoutService.logWorkout runs it. */
+  const bankSession = () => {
+    if (draft.length === 0) return;
+
+    // Resolve every drafted set's index/multiplier/XP from its position in
+    // the draft right now -- the same derivation the Logger uses to render
+    // it, so what gets banked always matches what was previewed.
+    const resolved = deriveDraft(draft, setsToday);
+
+    const netXp = resolved.reduce((s, d) => s + d.net, 0);
+    const remaining = Math.max(0, RULES.dailyXpCap - hero.dailyXp);
+    const granted = Math.min(Math.round(netXp), remaining);
+    const capScale = netXp > 0 ? granted / netXp : 0;
+
+    const effVolume = resolved.reduce((s, d) => s + d.volume * d.mult, 0) * capScale;
+    const staGain = resolved.reduce((s, d) => {
+      if (d.kind === 'CARDIO') return s + ((d.durationSec / 60) * d.intensity / 10) * d.mult;
+      return s + (d.reps >= 12 ? (d.reps - 11) * 0.05 * d.mult : 0);
+    }, 0) * capScale;
+
+    const sessionBest = Math.max(...resolved.map((d) => (d.kind === 'STRENGTH' ? epleyE1rm(d.weightKg, d.reps) : 0)), 0);
+    const prBonus = sessionBest > hero.bestE1rm && hero.bestE1rm > 0 ? (sessionBest - hero.bestE1rm) * 0.5 : 0;
+
+    // Level roll - a big session can take more than one level.
+    let level = hero.level;
+    let pool = hero.currentXp + granted;
+    let gained = 0;
+    while (pool >= xpForNextLevel(level) && level < 999) {
+      pool -= xpForNextLevel(level);
+      level += 1;
+      gained += 1;
+    }
+
+    const before = stats;
+    const newStrPoints = hero.strPoints + effVolume / 1000 + prBonus;
+    const newStaPoints = hero.staPoints + staGain;
+    const trainedToday = hero.dailyXp > 0;
+    const newStreak = trainedToday ? hero.streak : hero.streak + 1;
+    const newActiveDays = trainedToday ? hero.activeDays30 : Math.min(30, hero.activeDays30 + 1);
+
+    setHero((h) => ({
+      ...h,
+      level,
+      currentXp: pool,
+      lifetimeXp: h.lifetimeXp + granted,
+      strPoints: newStrPoints,
+      staPoints: newStaPoints,
+      streak: newStreak,
+      activeDays30: newActiveDays,
+      bestE1rm: Math.max(h.bestE1rm, sessionBest),
+      dailyXp: h.dailyXp + granted,
+    }));
+
+    setStatDelta({
+      str: strengthStat(newStrPoints) - before.str,
+      sta: staminaStat(newStaPoints) - before.sta,
+      con: consistencyStat(newActiveDays, newStreak) - before.con,
+    });
+    if (statDeltaTimer.current) clearTimeout(statDeltaTimer.current);
+    statDeltaTimer.current = setTimeout(() => setStatDelta({ str: 0, sta: 0, con: 0 }), 3000);
+
+    // Today's set counts drive diminishing returns for the rest of the day.
+    setSetsToday((prev) => {
+      const next = { ...prev };
+      draft.forEach((d) => {
+        const key = slugify(d.exerciseName);
+        next[key] = (next[key] ?? 0) + 1;
+      });
+      return next;
+    });
+
+    const volume = resolved.reduce((s, d) => s + d.volume, 0);
+    setHistory((h) => [{
+      id: `h${Date.now()}`,
+      title: draft.length > 6 ? 'Full session' : draft[0].exerciseName,
+      when: 'Just now',
+      sets: draft.length,
+      volume,
+      xp: granted,
+    }, ...h]);
+
+    // Your own duel scores move with the work you just banked.
+    setDuels((list) => list.map((d) => {
+      if (d.status !== 'ACTIVE') return d;
+      const bump = { TOTAL_XP: granted, TOTAL_VOLUME: volume, TOTAL_SETS: draft.length, ACTIVE_DAYS: trainedToday ? 0 : 1 }[d.metric];
+      return { ...d, youScore: d.youScore + bump, youVolume: (d.youVolume ?? 0) + volume };
+    }));
+
+    setDraft([]);
+    setXpFlash(true);
+    setTimeout(() => setXpFlash(false), 700);
+
+    if (granted < Math.round(netXp)) {
+      notify('reject', `Daily cap reached. ${fmt(granted)} of ${fmt(Math.round(netXp))} XP banked.`);
+    } else {
+      notify('good', `+${fmt(granted)} XP banked.`);
+    }
+    if (gained > 0) setLevelUp({ newLevel: level, gained });
+  };
+
+  const challenge = ({ rivalId, metric, stake, days }) => {
+    const rival = rivalById[rivalId];
+    setDuels((list) => [{
+      id: `d${Date.now()}`, rivalId, metric, status: 'PENDING', stake, days,
+      daysLeft: days, youScore: 0, rivalScore: 0, incoming: false, rated: true,
+    }, ...list]);
+    notify('good', `Challenge sent to ${rival.display}.`);
+  };
+
+  const respond = (duelId, accept) => {
+    setDuels((list) => list.map((d) => {
+      if (d.id !== duelId) return d;
+      if (!accept) return { ...d, status: 'DECLINED' };
+      return { ...d, status: 'ACTIVE', youScore: 0, rivalScore: 0, youActiveDays: 0, rivalActiveDays: 0 };
+    }));
+    notify(accept ? 'good' : 'info', accept ? 'Duel is live. Go earn it.' : 'Challenge dismissed.');
+  };
+
+  /** Agent 3's tie-break ladder: score, then active days, then volume, then CON. */
+  const settle = (duelId) => {
+    const duel = duels.find((d) => d.id === duelId);
+    if (!duel || duel.status !== 'ACTIVE') return;
+
+    let verdict = Math.sign(duel.youScore - duel.rivalScore);
+    if (verdict === 0) verdict = Math.sign((duel.youActiveDays ?? 0) - (duel.rivalActiveDays ?? 0));
+    if (verdict === 0) verdict = Math.sign((duel.youVolume ?? 0) - (duel.rivalVolume ?? 0));
+    if (verdict === 0) verdict = Math.sign(stats.con - rivalById[duel.rivalId].con);
+
+    const outcome = verdict > 0 ? 'WIN' : verdict < 0 ? 'LOSS' : 'DRAW';
+    const margin = Math.abs(duel.youScore - duel.rivalScore);
+    const reward = outcome === 'WIN'
+      ? Math.min(300, 150 + duel.stake + Math.round(margin * 0.1))
+      : outcome === 'DRAW' ? 25 + Math.round(duel.stake / 2) : 25;
+    const unit = METRICS.find((m) => m.id === duel.metric).unit;
+
+    // Duel XP is exempt from the daily cap - it was earned in the arena.
+    setHero((h) => {
+      let level = h.level;
+      let pool = h.currentXp + reward;
+      while (pool >= xpForNextLevel(level) && level < 999) { pool -= xpForNextLevel(level); level += 1; }
+      return {
+        ...h, level, currentXp: pool, lifetimeXp: h.lifetimeXp + reward,
+        duelsWon: h.duelsWon + (outcome === 'WIN' ? 1 : 0),
+        duelsLost: h.duelsLost + (outcome === 'LOSS' ? 1 : 0),
+        duelsDrawn: h.duelsDrawn + (outcome === 'DRAW' ? 1 : 0),
+      };
+    });
+
+    setDuels((list) => list.map((d) => (d.id === duelId
+      ? {
+        ...d, status: 'COMPLETED', outcome, daysLeft: 0,
+        note: outcome === 'DRAW'
+          ? 'Dead even after every tie-breaker.'
+          : `${outcome === 'WIN' ? 'You' : rivalById[d.rivalId].display} took it by ${fmt(margin)} ${unit}.`,
+      }
+      : d)));
+
+    notify(outcome === 'LOSS' ? 'info' : 'good',
+      `${outcome === 'WIN' ? 'Victory' : outcome === 'DRAW' ? 'Draw' : 'Defeat'} — +${reward} XP.`);
+  };
+
+  if (!signedIn) {
+    return (
+      <MotionConfig reducedMotion="user">
+        <div className="min-h-full bg-iron-900 text-chalk font-body">
+          <AuthScreen onEnter={(username) => {
+            setHero((h) => ({ ...h, username, display: username === 'you' ? 'You' : username }));
+            setSignedIn(true);
+          }} />
+        </div>
+      </MotionConfig>
+    );
+  }
+
+  return (
+    <MotionConfig reducedMotion="user">
+    <div className="min-h-full bg-iron-900 text-chalk font-body">
+      <header className="sticky z-30 bg-iron-950/90 backdrop-blur border-b border-iron-700"
+        style={{ top: 'env(safe-area-inset-top, 0px)' }}>
+        <div className="mx-auto max-w-5xl px-4 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <Dumbbell size={20} className="text-plate-ember shrink-0" aria-hidden />
+            <span className="font-display text-2xl tracking-wide">FITCLASH</span>
+          </div>
+          <div className="flex items-center gap-1 min-w-0 shrink-0">
+            <DailyBudget dailyXp={hero.dailyXp} />
+            <button
+              onClick={() => { setSignedIn(false); setTab('dashboard'); }}
+              className="shrink-0 min-w-[44px] min-h-[44px] grid place-items-center text-chalk-muted
+                hover:text-chalk transition-colors focus:outline-none focus-visible:ring-2
+                focus-visible:ring-plate-ember focus-visible:ring-offset-2 focus-visible:ring-offset-iron-900 rounded"
+              aria-label="Log out"
+            >
+              <LogOut size={18} aria-hidden />
+            </button>
+          </div>
+        </div>
+
+        <nav className="mx-auto max-w-5xl px-4 flex gap-1 overflow-x-auto" aria-label="Sections">
+          {TABS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              aria-current={tab === id ? 'page' : undefined}
+              className={`relative font-data uppercase tracking-[0.14em] text-xs font-semibold px-3
+                min-h-[44px] inline-flex items-center gap-1.5 whitespace-nowrap transition-colors
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-plate-ember focus-visible:ring-inset
+                ${tab === id ? 'text-plate-ember' : 'text-chalk-muted hover:text-chalk'}`}
+            >
+              <Icon size={14} aria-hidden /> {label}
+              {tab === id && (
+                <motion.span layoutId="tabRail" className="absolute left-2 right-2 -bottom-px h-0.5 bg-plate-ember"
+                  transition={{ type: 'spring', stiffness: 380, damping: 32 }} />
+              )}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-4 py-6 pb-28">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.2 }}
+          >
+            {tab === 'dashboard' && (
+              <Dashboard
+                hero={hero} stats={stats} statDelta={statDelta} xpFlash={xpFlash}
+                history={history} duels={duels} rivalById={rivalById}
+                onGoLog={() => setTab('log')}
+              />
+            )}
+            {tab === 'log' && (
+              <Logger
+                hero={hero} setsToday={setsToday} draft={draft} setDraft={setDraft}
+                onBank={bankSession} notify={notify}
+              />
+            )}
+            {tab === 'duels' && (
+              <DuelsHub
+                duels={duels} rivalById={rivalById}
+                onChallenge={challenge} onRespond={respond} onSettle={settle}
+              />
+            )}
+            {tab === 'board' && <Leaderboard hero={hero} stats={stats} />}
+          </motion.div>
+        </AnimatePresence>
+      </main>
+
+      <Toasts toasts={toasts} dismiss={dismiss} />
+      <LevelUpOverlay levelUp={levelUp} onDone={() => setLevelUp(null)} />
+    </div>
+    </MotionConfig>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(FitClash));
+</script>

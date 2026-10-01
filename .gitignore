@@ -1,0 +1,26 @@
+# Java / Maven
+backend/target/
+*.class
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Env
+.env
+.env.local
+*.local
+
+# Personal Claude Code settings (machine-specific permissions; the shared
+# project rules live in .claude/settings.json and ARE committed)
+.claude/settings.local.json
+
+# Editors / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*

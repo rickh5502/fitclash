@@ -1,0 +1,34 @@
+/* File: frontend/src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: #13161b;
+    color: #f2efe7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* The HUD is a committed dark world - it does not follow the OS theme. */
+  :root {
+    color-scheme: dark;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
