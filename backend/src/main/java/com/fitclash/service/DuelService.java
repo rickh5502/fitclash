@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,6 +54,19 @@ import java.util.UUID;
 public class DuelService {
 
     private static final Logger log = LoggerFactory.getLogger(DuelService.class);
+
+    /**
+     * Every other "what day is it" calculation in this app (workout dates, XP
+     * event dates, streaks) uses the JVM's default zone via LocalDate.now().
+     * Duel windows used to be hard-coded to ZoneOffset.UTC instead, which is
+     * silently wrong whenever the server's default zone is not UTC: a workout
+     * logged "today" in the server's local zone can fall on a different UTC
+     * calendar day, so the duel scoring query (keyed off event_date) finds
+     * nothing and a duel both sides trained for resolves as "no work logged by
+     * either fighter". Using the same zone everywhere keeps workout dates and
+     * duel windows in agreement no matter what TZ the box runs in.
+     */
+    private static final ZoneId DUEL_ZONE = ZoneId.systemDefault();
 
     private final DuelRepository duels;
     private final UserRepository users;
@@ -131,8 +144,8 @@ public class DuelService {
         duel.setAcceptedAt(now);
         duel.setStartsAt(now);
         // Whole calendar days: the rest of today plus the remaining days.
-        LocalDate lastDay = LocalDate.now(ZoneOffset.UTC).plusDays(duel.getDurationDays() - 1L);
-        duel.setEndsAt(lastDay.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant());
+        LocalDate lastDay = LocalDate.now(DUEL_ZONE).plusDays(duel.getDurationDays() - 1L);
+        duel.setEndsAt(lastDay.plusDays(1).atStartOfDay(DUEL_ZONE).toInstant());
 
         duels.save(duel);
         return toView(duel, userId, levelsFor(participants(duel)));
@@ -178,8 +191,8 @@ public class DuelService {
 
     @Transactional
     public DuelView resolve(Duel duel) {
-        LocalDate from = LocalDate.ofInstant(duel.getStartsAt(), ZoneOffset.UTC);
-        LocalDate to = LocalDate.ofInstant(duel.getEndsAt().minusSeconds(1), ZoneOffset.UTC);
+        LocalDate from = LocalDate.ofInstant(duel.getStartsAt(), DUEL_ZONE);
+        LocalDate to = LocalDate.ofInstant(duel.getEndsAt().minusSeconds(1), DUEL_ZONE);
 
         UUID challengerId = duel.getChallenger().getId();
         UUID opponentId = duel.getOpponent().getId();
@@ -340,8 +353,8 @@ public class DuelService {
 
         // An active duel shows the live standings, recomputed on read.
         if (duel.getStatus() == Duel.Status.ACTIVE && duel.getStartsAt() != null) {
-            LocalDate from = LocalDate.ofInstant(duel.getStartsAt(), ZoneOffset.UTC);
-            LocalDate today = LocalDate.now(ZoneOffset.UTC);
+            LocalDate from = LocalDate.ofInstant(duel.getStartsAt(), DUEL_ZONE);
+            LocalDate today = LocalDate.now(DUEL_ZONE);
             challengerScore = score(duel.getChallenger().getId(), duel.getMetric(), from, today);
             opponentScore = score(duel.getOpponent().getId(), duel.getMetric(), from, today);
         }
