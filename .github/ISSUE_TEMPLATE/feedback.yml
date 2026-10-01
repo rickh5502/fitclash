@@ -1,0 +1,19 @@
+name: Feedback / idea
+description: A suggestion, a "this would be cool," or general feedback on FitClash.
+title: "[Idea] "
+labels: ["feedback"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What's the idea or feedback?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would this help? (optional)
+      description: What problem it solves, or what made you think of it.
+    validations:
+      required: false
