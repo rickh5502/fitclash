@@ -73,6 +73,15 @@ public class AuthService {
         return buildResponse(user, character);
     }
 
+    // A real bcrypt hash of a value nobody will ever type, spent purely to burn
+    // the same CPU time as a real check when the account does not exist. Without
+    // this, "unknown user" returns in microseconds and "wrong password" takes the
+    // tens of milliseconds bcrypt needs, which lets an attacker enumerate valid
+    // usernames/emails from response timing alone, even though the error message
+    // is identical either way.
+    private static final String DUMMY_HASH =
+            "$2a$12$C6UzMDM.H6dfI/f/IKcEeOw.gpOT.9ZeiRS1X5B5F.4T6ZZcS6k2.";
+
     @Transactional
     public AuthResponse login(LoginRequest request) {
         String identifier = request.usernameOrEmail().trim();
@@ -81,7 +90,13 @@ public class AuthService {
                 ? users.findByEmailIgnoreCase(identifier)
                 : users.findByUsernameIgnoreCase(identifier);
 
-        User user = found.orElseThrow(() -> ApiException.unauthorized("Wrong username or password."));
+        if (found.isEmpty()) {
+            // Burn the bcrypt cost even though there is no account, so this branch
+            // and the "wrong password" branch below take the same time.
+            passwordEncoder.matches(request.password(), DUMMY_HASH);
+            throw ApiException.unauthorized("Wrong username or password.");
+        }
+        User user = found.get();
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw ApiException.unauthorized("Wrong username or password.");
         }

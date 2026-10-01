@@ -1,6 +1,7 @@
 // File: src/main/java/com/fitclash/config/SecurityConfig.java
 package com.fitclash.config;
 
+import com.fitclash.security.AuthRateLimitFilter;
 import com.fitclash.security.JwtAuthFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -29,11 +30,14 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final AuthRateLimitFilter authRateLimitFilter;
     private final List<String> allowedOrigins;
 
     public SecurityConfig(JwtAuthFilter jwtAuthFilter,
+                          AuthRateLimitFilter authRateLimitFilter,
                           @Value("${fitclash.cors.allowed-origins}") String[] allowedOrigins) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.authRateLimitFilter = authRateLimitFilter;
         this.allowedOrigins = Arrays.asList(allowedOrigins);
     }
 
@@ -66,7 +70,8 @@ public class SecurityConfig {
                     res.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     res.getWriter().write("{\"error\":\"forbidden\",\"message\":\"You cannot touch that.\"}");
                 }))
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(authRateLimitFilter, JwtAuthFilter.class);
 
         return http.build();
     }
