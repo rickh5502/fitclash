@@ -200,26 +200,34 @@ const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const fmt1 = (n) => (Math.round(n * 10) / 10).toLocaleString('en-US');
 
 const STAT_META = {
+  // `color` is the bar/icon tier (>=3:1 on the dark surfaces it renders on).
+  // `textColor` is the brightened, text-safe tint (>=4.5:1) for anywhere the
+  // color is rendered AS text, e.g. the "+N" delta chip — the StatCard delta
+  // used to paint `color` directly as text, which on `iron-800` only clears
+  // ~3:1, below the 4.5:1 text floor. Fixed here.
   str: {
-    label: 'STR', full: 'Strength', color: '#D8322C', Icon: Dumbbell,
+    label: 'STR', full: 'Strength', color: '#C1392B', textColor: '#FF8A75', Icon: Dumbbell,
     blurb: 'Tonnage and one-rep maxes', raise: 'Raise it by lifting heavier loads for more total volume.',
     ceiling: 50, ceilingLabel: 'elite reference',
   },
   sta: {
-    label: 'STA', full: 'Stamina', color: '#2C6FD1', Icon: Activity,
+    label: 'STA', full: 'Stamina', color: '#2E7D9E', textColor: '#7FC3E0', Icon: Activity,
     blurb: 'Time under effort, high reps', raise: 'Raise it with high-rep sets and longer cardio sessions.',
     ceiling: 50, ceilingLabel: 'elite reference',
   },
   con: {
-    label: 'CON', full: 'Consistency', color: '#E9B424', Icon: Flame,
+    label: 'CON', full: 'Consistency', color: '#C9922F', textColor: '#E8B860', Icon: Flame,
     blurb: 'Training days in the last 30', raise: 'Raise it by training on more days and keeping the streak alive.',
     ceiling: 40, ceilingLabel: 'real ceiling',
   },
 };
 
-function Panel({ children, className = '' }) {
+function Panel({ children, className = '', elevated = false }) {
   return (
-    <div className={`rounded-lg border border-iron-700 bg-iron-800/60 backdrop-blur-sm ${className}`}>
+    <div
+      className={`rounded-2xl border border-iron-700/80 bg-iron-800/60 backdrop-blur-sm
+        ${elevated ? 'shadow-lift' : 'shadow-panel'} ${className}`}
+    >
       {children}
     </div>
   );
@@ -233,21 +241,33 @@ function Eyebrow({ children, className = '' }) {
   );
 }
 
-function PlateButton({ children, onClick, tone = 'ember', disabled, className = '', type = 'button' }) {
+/**
+ * `primary` (the default) is the single "press this" signal per screen — a
+ * spark gradient, not flat ember, specifically so a button press is never
+ * visually identical to the XP-gain flash (which stays pure `plate.ember`
+ * everywhere else: the XP bar fill, the level-up badge). Overloading one
+ * hue across "you earned XP" and "every button on the page" was the exact
+ * problem visual-spec.md flagged; this fixes it with a distinct treatment
+ * rather than just a different flat color, which also makes the one primary
+ * action per screen more visually confident than a plain fill would.
+ */
+function PlateButton({ children, onClick, tone = 'primary', disabled, className = '', type = 'button' }) {
   const tones = {
-    ember: 'bg-plate-ember text-iron-950 hover:bg-[#ff9040]',
-    steel: 'bg-iron-700 text-chalk hover:bg-iron-600',
+    primary: 'bg-spark text-iron-950 shadow-glow hover:brightness-110 active:brightness-95',
+    steel: 'bg-iron-700 text-chalk hover:bg-iron-600 border border-iron-600',
     ghost: 'bg-transparent text-chalk-dim hover:text-chalk border border-iron-600',
-    danger: 'bg-plate-str text-chalk hover:bg-[#e8443e]',
+    danger: 'bg-plate-oxide text-chalk hover:bg-[#e8443e]',
   };
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`font-data uppercase tracking-[0.12em] text-sm font-semibold px-4 py-2.5 rounded transition-colors
-        disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2
-        focus-visible:ring-plate-ember focus-visible:ring-offset-2 focus-visible:ring-offset-iron-900
+      className={`font-data uppercase tracking-[0.12em] text-sm font-semibold px-4 py-2.5 rounded-lg
+        transition-all active:scale-[0.98]
+        disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-plate-ember focus-visible:ring-offset-2
+        focus-visible:ring-offset-iron-900
         ${tones[tone]} ${className}`}
     >
       {children}
@@ -255,50 +275,317 @@ function PlateButton({ children, onClick, tone = 'ember', disabled, className = 
   );
 }
 
-/** The RPG avatar: a figure pressing a loaded bar, breathing on an idle loop. */
-function Avatar({ level, glow, size = 176 }) {
+/* ----------------------------------------------------- the growing character
+ * Six silhouettes (visual-spec.md §2), each a diff against the shared 120x120
+ * rig (torso centerline x=60, head center (60,40), feet at y=104), so growth
+ * lives in the shape itself and not just in a progress ring. STR/STA/CON each
+ * drive one cheap, discrete (3-bucket) visual property so two level-20
+ * characters with different training never look identical.
+ */
+
+const PLATE_HEX = { oxide: '#C1392B', galvanized: '#2E7D9E', brass: '#C9922F' };
+
+const TIERS = [
+  {
+    tier: 1, name: 'Chalk Hands', minLevel: 1,
+    torso: 9, head: 8, limb: 4.5, feet: [56, 64],
+    torsoPath: 'M60 54 Q62 70 60 88', shoulder: ['M60 58 L44 46', 'M60 58 L76 46'],
+    barX: [30, 90], barThick: 4, plates: [{ w: 9, h: 16, c: 'galvanized' }],
+    collar: null, belt: null, platform: 'none', auraRings: 0, particles: 0,
+  },
+  {
+    tier: 2, name: 'Lifter', minLevel: 5,
+    torso: 10, head: 8.5, limb: 5, feet: [54, 66],
+    torsoPath: 'M60 52 L60 88', shoulder: ['M60 58 L44 46', 'M60 58 L76 46'],
+    barX: [25, 95], barThick: 4.5, plates: [{ w: 9, h: 19, c: 'galvanized' }, { w: 7, h: 13, c: 'brass' }],
+    collar: null, belt: null, platform: 'line', auraRings: 0, particles: 0,
+  },
+  {
+    tier: 3, name: 'Competitor', minLevel: 10,
+    torso: 11, head: 9, limb: 5.5, feet: [53, 67],
+    torsoPath: 'M60 52 L60 88', shoulder: ['M60 60 L44 46', 'M60 60 L76 46'],
+    barX: [20, 100], barThick: 5, plates: [{ w: 9, h: 19, c: 'oxide' }, { w: 7, h: 13, c: 'galvanized' }],
+    collar: null, belt: null, platform: 'ticks', auraRings: 0, particles: 0,
+  },
+  {
+    tier: 4, name: 'Contender', minLevel: 15,
+    torso: 12.5, head: 9.5, limb: 6.5, feet: [51, 69],
+    torsoPath: 'M60 52 L60 88', shoulder: ['M58 58 L42 46', 'M62 58 L78 46'], belt: 'line',
+    barX: [18, 102], barThick: 5.5,
+    plates: [{ w: 9, h: 23, c: 'oxide' }, { w: 7, h: 15, c: 'galvanized' }, { w: 6, h: 11, c: 'brass' }],
+    collar: null, platform: 'rect', auraRings: 1, particles: 0,
+  },
+  {
+    tier: 5, name: 'Champion', minLevel: 20,
+    torso: 14, head: 10, limb: 7.5, feet: [49, 71], taper: true,
+    torsoPath: 'M60 50 L58 70 L60 88', shoulder: ['M57 56 L40 45', 'M63 56 L80 45'], belt: 'buckle',
+    barX: [16, 104], barThick: 6,
+    plates: [{ w: 9, h: 23, c: 'oxide' }, { w: 9, h: 23, c: 'oxide' }, { w: 7, h: 15, c: 'galvanized' }, { w: 6, h: 11, c: 'brass' }],
+    collar: { w: 3, h: 6 }, platform: 'rect-highlight', auraRings: 2, particles: 4,
+  },
+  {
+    tier: 6, name: 'Iron Titan', minLevel: 30,
+    torso: 16, head: 10.5, limb: 9, feet: [47, 73], taper: true, bowed: true,
+    torsoPath: 'M60 48 L56 70 L60 88', shoulder: ['M55 54 L37 44', 'M65 54 L83 44'], belt: 'cross',
+    barX: [14, 106], barThick: 6.5,
+    plates: [{ w: 9, h: 23, c: 'oxide' }, { w: 9, h: 23, c: 'oxide' }, { w: 9, h: 23, c: 'oxide' }, { w: 7, h: 15, c: 'galvanized' }, { w: 6, h: 11, c: 'brass' }],
+    collar: { w: 4, h: 8 }, platform: 'rect-glow', auraRings: 3, particles: 8,
+  },
+];
+
+const tierForLevel = (level) => {
+  let hit = TIERS[0];
+  for (const t of TIERS) if (level >= t.minLevel) hit = t;
+  return hit;
+};
+
+/** 3-bucket thresholds, applied to the already-computed 0-99 stat value. */
+const bucket3 = (v) => (v >= 40 ? 'high' : v >= 20 ? 'mid' : 'low');
+
+function PlatesRow({ plates, barX, barY }) {
+  let lx = barX[0] + 1;
+  let rx = barX[1] - 1;
+  return (
+    <>
+      {plates.map((p, i) => {
+        const el = (
+          <React.Fragment key={i}>
+            <rect x={lx} y={barY - p.h / 2} width={p.w} height={p.h} rx={2} fill={PLATE_HEX[p.c]} />
+            <rect x={rx - p.w} y={barY - p.h / 2} width={p.w} height={p.h} rx={2} fill={PLATE_HEX[p.c]} />
+          </React.Fragment>
+        );
+        lx += p.w;
+        rx -= p.w;
+        return el;
+      })}
+    </>
+  );
+}
+
+function Platform({ kind, barX }) {
+  if (kind === 'none') return null;
+  if (kind === 'line') return <line x1={barX[0]} x2={barX[1] + 10} y1={106} y2={106} stroke="#252A33" strokeWidth={1} />;
+  if (kind === 'ticks') return (
+    <>
+      <line x1={18} x2={102} y1={106} y2={106} stroke="#333945" strokeWidth={2} />
+      <line x1={40} x2={40} y1={100} y2={106} stroke="#333945" strokeWidth={2} />
+      <line x1={80} x2={80} y1={100} y2={106} stroke="#333945" strokeWidth={2} />
+    </>
+  );
+  const base = <rect x={10} y={104} width={100} height={4} fill="#1B1F26" />;
+  if (kind === 'rect') return base;
+  if (kind === 'rect-highlight') return (
+    <>
+      {base}
+      <line x1={10} x2={110} y1={104} y2={104} stroke="#333945" strokeWidth={1} />
+    </>
+  );
+  return (
+    <>
+      <rect x={6} y={104} width={108} height={10} fill="#E8631B" opacity={0.18} filter="url(#platformGlow)" />
+      {base}
+      <line x1={10} x2={110} y1={104} y2={104} stroke="#333945" strokeWidth={1} />
+    </>
+  );
+}
+
+function Belt({ kind }) {
+  if (!kind) return null;
+  if (kind === 'line') return <line x1={54} x2={66} y1={68} y2={68} stroke="#4A5261" strokeWidth={2} />;
+  if (kind === 'buckle') return (
+    <>
+      <line x1={53} x2={67} y1={68} y2={68} stroke="#4A5261" strokeWidth={2} />
+      <rect x={58.5} y={66.5} width={3} height={3} fill="#C9922F" />
+    </>
+  );
+  return (
+    <>
+      <line x1={52} x2={68} y1={68} y2={68} stroke="#4A5261" strokeWidth={2} />
+      <path d="M58 66 L62 70 M62 66 L58 70" stroke="#C9922F" strokeWidth={1} />
+    </>
+  );
+}
+
+/** Static, fixed-point particles around the aura ring — "charged," no per-frame orbit cost. */
+function AuraParticles({ count, reduceMotion }) {
+  if (!count || reduceMotion) return null;
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => {
+        const angle = (i / count) * Math.PI * 2;
+        return (
+          <circle key={i} cx={60 + Math.cos(angle) * 58} cy={60 + Math.sin(angle) * 58}
+            r={1.5} fill="#E8631B" opacity={0.4} />
+        );
+      })}
+    </>
+  );
+}
+
+/** One tier's full figure — torso/limbs/plates/environment, stat-bucketed. */
+function Figure({ t, buckets, reduceMotion }) {
+  const [feetL, feetR] = t.feet;
+  const bowed = t.bowed || buckets.str === 'high' ? 2 : buckets.str === 'mid' ? 1 : 0;
+  const barY = 46;
+  const barPath = bowed
+    ? `M${t.barX[0]} ${barY} Q60 ${barY + bowed} ${t.barX[1]} ${barY}`
+    : null;
+
+  return (
+    <>
+      <Platform kind={t.platform} barX={t.barX} />
+      <Belt kind={t.belt} />
+      <motion.g
+        animate={reduceMotion ? { y: 0 } : { y: [0, -1.6, 0] }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        {/* legs */}
+        <path d={`M${feetL + 2} 88 L${feetL} 104 M${feetR - 2} 88 L${feetR} 104`}
+          stroke="#8B94A3" strokeWidth={t.limb} strokeLinecap="round" />
+        {/* torso */}
+        <path d={t.torsoPath} stroke="#B9C0CB" strokeWidth={t.torso} strokeLinecap="round" fill="none" />
+        {/* head */}
+        <circle cx={60} cy={40} r={t.head} fill="#F2EFE7" />
+        {/* STA breath marks — low: none, mid: one, high: two */}
+        {buckets.sta !== 'low' && (
+          <line x1={60} x2={60} y1={28} y2={24} stroke="#4A5261" strokeWidth={1.2} opacity={0.3} />
+        )}
+        {buckets.sta === 'high' && (
+          <>
+            <line x1={57} x2={55} y1={28} y2={23} stroke="#4A5261" strokeWidth={1} opacity={0.5} />
+            <line x1={63} x2={65} y1={28} y2={23} stroke="#4A5261" strokeWidth={1} opacity={0.5} />
+          </>
+        )}
+        {/* arms to the bar */}
+        <path d={t.shoulder.join(' ')} stroke="#B9C0CB" strokeWidth={t.limb + 1} strokeLinecap="round" />
+        {/* barbell */}
+        {barPath
+          ? <path d={barPath} stroke="#8B94A3" strokeWidth={t.barThick} strokeLinecap="round" fill="none" />
+          : <rect x={t.barX[0]} y={barY - t.barThick / 2} width={t.barX[1] - t.barX[0]} height={t.barThick}
+              rx={t.barThick / 2} fill="#8B94A3" />}
+        <PlatesRow plates={t.plates} barX={t.barX} barY={barY} />
+        {t.collar && (
+          <>
+            <rect x={t.barX[0] - t.collar.w} y={barY - t.collar.h / 2} width={t.collar.w} height={t.collar.h} fill="#4A5261" />
+            <rect x={t.barX[1]} y={barY - t.collar.h / 2} width={t.collar.w} height={t.collar.h} fill="#4A5261" />
+          </>
+        )}
+      </motion.g>
+    </>
+  );
+}
+
+/** The RPG avatar: a figure that visibly grows across six silhouettes, with
+ * stat-driven detail (STR bends the bar, STA adds breath, CON steadies the
+ * aura) and a categorically bigger animation when it crosses into a new tier
+ * than a routine level-up gets. */
+function Avatar({ level, str = 10, sta = 10, con = 10, glow, size = 176 }) {
   const aura = Math.min(1, 0.25 + level / 24);
   const reduceMotion = useReducedMotion();
+  const tier = tierForLevel(level);
+  const buckets = useMemo(() => ({ str: bucket3(str), sta: bucket3(sta), con: bucket3(con) }), [str, sta, con]);
+
+  const prevTierRef = useRef(tier.tier);
+  const [crossing, setCrossing] = useState(false);
+  const [prevTier, setPrevTier] = useState(null);
+  useEffect(() => {
+    if (tier.tier !== prevTierRef.current) {
+      setPrevTier(TIERS.find((t) => t.tier === prevTierRef.current));
+      prevTierRef.current = tier.tier;
+      if (reduceMotion) { setCrossing(false); setPrevTier(null); return; }
+      setCrossing(true);
+      const t = setTimeout(() => setCrossing(false), 1200);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [tier.tier, reduceMotion]);
+
+  const conAmp = buckets.con === 'high' ? 1.3 : buckets.con === 'mid' ? 0.7 : 1;
+
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={0} height={0} aria-hidden="true">
+        <defs>
+          <filter id="platformGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.4" />
+          </filter>
+        </defs>
+      </svg>
+
+      {/* idle aura glow — amplitude eased by CON (a steady trainer's aura holds, doesn't surge) */}
       <motion.div
         aria-hidden
         className="absolute inset-0 rounded-full"
         style={{
-          background: `radial-gradient(circle at 50% 55%, rgba(255,122,26,${0.32 * aura}) 0%, rgba(255,122,26,0.06) 45%, transparent 70%)`,
+          background: `radial-gradient(circle at 50% 55%, rgba(232,99,27,${0.32 * aura}) 0%, rgba(232,99,27,0.06) 45%, transparent 70%)`,
         }}
         animate={reduceMotion
-          ? { scale: 1, opacity: glow ? 1 : 0.7 }
-          : { scale: glow ? [1, 1.28, 1] : [1, 1.06, 1], opacity: glow ? [0.8, 1, 0.8] : [0.55, 0.8, 0.55] }}
-        transition={reduceMotion ? { duration: 0 } : { duration: glow ? 0.7 : 4.5, repeat: Infinity, ease: 'easeInOut' }}
+          ? { scale: 1, opacity: glow || crossing ? 1 : 0.7 }
+          : {
+            scale: crossing ? [1, 1.5, 1] : glow ? [1, 1.28, 1] : [1, 1 + 0.06 * conAmp, 1],
+            opacity: crossing ? [0.9, 1, 0.9] : glow ? [0.8, 1, 0.8] : [0.55, 0.5 + 0.3 * conAmp, 0.55],
+          }}
+        transition={reduceMotion ? { duration: 0 } : { duration: crossing ? 0.4 : glow ? 0.7 : 4.5, repeat: crossing ? 0 : Infinity, ease: 'easeInOut' }}
       />
-      <svg viewBox="0 0 120 120" className="relative w-full h-full" role="img" aria-label="Your character">
-        <circle cx="60" cy="60" r="52" fill="#1B1F26" stroke="#333945" strokeWidth="1.5" />
-        <circle cx="60" cy="60" r="52" fill="none" stroke="#FF7A1A" strokeWidth="2"
-          strokeDasharray={`${aura * 327} 327`} strokeLinecap="round" transform="rotate(-90 60 60)" opacity="0.9" />
-        <motion.g
-          animate={reduceMotion ? { y: 0 } : { y: [0, -1.6, 0] }}
-          transition={reduceMotion ? { duration: 0 } : { duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          {/* legs */}
-          <path d="M53 88 L51 104 M67 88 L69 104" stroke="#8B94A3" strokeWidth="5" strokeLinecap="round" />
-          {/* torso */}
-          <path d="M60 52 L60 88" stroke="#B9C0CB" strokeWidth="11" strokeLinecap="round" />
-          {/* head */}
-          <circle cx="60" cy="40" r="9" fill="#F2EFE7" />
-          {/* arms up to the bar */}
-          <path d="M60 60 L44 46 M60 60 L76 46" stroke="#B9C0CB" strokeWidth="5.5" strokeLinecap="round" />
-          {/* barbell */}
-          <rect x="20" y="42" width="80" height="5" rx="2.5" fill="#8B94A3" />
-          <rect x="22" y="33" width="9" height="23" rx="2" fill="#D8322C" />
-          <rect x="33" y="37" width="7" height="15" rx="2" fill="#2C6FD1" />
-          <rect x="89" y="33" width="9" height="23" rx="2" fill="#D8322C" />
-          <rect x="80" y="37" width="7" height="15" rx="2" fill="#2C6FD1" />
-        </motion.g>
+
+      <svg viewBox="0 0 120 120" className="relative w-full h-full" role="img" aria-label={`Your character — ${tier.name}`}>
+        <circle cx={60} cy={60} r={52} fill="#1B1F26" stroke="#333945" strokeWidth={1.5} />
+
+        {/* tier environment aura rings (static or slow independent pulse) */}
+        {tier.auraRings >= 1 && (
+          <motion.circle cx={60} cy={60} r={56} fill="none" stroke="#E8631B" strokeWidth={1} opacity={0.15}
+            animate={reduceMotion || tier.auraRings < 1 ? {} : { scale: [1, 1.05, 1] }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ transformOrigin: '60px 60px' }} />
+        )}
+        {tier.auraRings >= 3 && (
+          <circle cx={60} cy={60} r={60} fill="none" stroke="#E8631B" strokeWidth={1} opacity={0.1} />
+        )}
+
+        <circle cx={60} cy={60} r={52} fill="none" stroke="#E8631B" strokeWidth={2}
+          strokeDasharray={buckets.con === 'high' ? '4 2' : `${aura * 327} 327`}
+          strokeLinecap="round" transform="rotate(-90 60 60)" opacity={0.9} />
+
+        <AuraParticles count={tier.particles} reduceMotion={reduceMotion} />
+
+        <AnimatePresence>
+          {!crossing || reduceMotion ? (
+            <motion.g key={`tier-${tier.tier}`} initial={false}>
+              <Figure t={tier} buckets={buckets} reduceMotion={reduceMotion} />
+            </motion.g>
+          ) : (
+            <React.Fragment key="crossfade">
+              {prevTier && (
+                <motion.g initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+                  <Figure t={prevTier} buckets={buckets} reduceMotion={reduceMotion} />
+                </motion.g>
+              )}
+              <motion.g initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.15 }}>
+                <Figure t={tier} buckets={buckets} reduceMotion={reduceMotion} />
+              </motion.g>
+              {Array.from({ length: 12 }).map((_, i) => {
+                const angle = (i / 12) * Math.PI * 2;
+                return (
+                  <motion.circle key={i} cx={60} cy={60} r={3} fill="#E8631B"
+                    initial={{ x: 0, y: 0, opacity: 1 }}
+                    animate={{ x: Math.cos(angle) * 50, y: Math.sin(angle) * 50, opacity: 0 }}
+                    transition={{ duration: 0.9, delay: i * 0.02, ease: 'easeOut' }} />
+                );
+              })}
+            </React.Fragment>
+          )}
+        </AnimatePresence>
       </svg>
-      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-3 py-1 rounded bg-iron-950 border border-plate-ember/60">
+
+      <motion.div
+        className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-3 py-1 rounded-lg bg-iron-950 border border-plate-ember/60"
+        key={level}
+        initial={reduceMotion ? false : { scale: 1 }}
+        animate={reduceMotion ? {} : { scale: [1, 1.35, 1] }}
+        transition={{ duration: 0.5, ease: 'backOut' }}
+      >
         <span className="font-display text-plate-ember text-lg leading-none">LV {level}</span>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -409,7 +696,7 @@ function DailyBudget({ dailyXp }) {
     <div className="flex items-center gap-2.5 min-w-0">
       <div className="text-right hidden sm:block">
         <Eyebrow className="leading-none">Daily cap</Eyebrow>
-        <div className={`font-data text-sm tabular-nums ${spent ? 'text-plate-strText' : 'text-chalk-dim'}`}>
+        <div className={`font-data text-sm tabular-nums ${spent ? 'text-plate-oxideText' : 'text-chalk-dim'}`}>
           {fmt(dailyXp)}/{fmt(RULES.dailyXpCap)}
         </div>
       </div>
@@ -509,7 +796,7 @@ function AuthScreen({ onEnter }) {
               onChange={(v) => setForm({ ...form, password: v })} />
 
             {error && (
-              <p className="flex items-start gap-1.5 text-xs text-plate-strText">
+              <p className="flex items-start gap-1.5 text-xs text-plate-oxideText">
                 <AlertTriangle size={14} className="mt-px shrink-0" aria-hidden /> {error}
               </p>
             )}
@@ -565,7 +852,7 @@ function Dashboard({ hero, stats, statDelta, xpFlash, history, duels, rivalById,
             </div>
             <div className="flex flex-wrap items-center gap-4 mt-2 mb-4 text-sm text-chalk-dim">
               <span className="inline-flex items-center gap-1.5">
-                <Flame size={14} className="text-plate-con" aria-hidden />
+                <Flame size={14} className="text-plate-brass" aria-hidden />
                 <span className="tabular-nums">{hero.streak}</span> day streak
               </span>
               <span className="inline-flex items-center gap-1.5">
@@ -574,7 +861,7 @@ function Dashboard({ hero, stats, statDelta, xpFlash, history, duels, rivalById,
                 <span className="text-chalk-muted tabular-nums">{hero.duelsLost}L {hero.duelsDrawn}D</span>
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <TrendingUp size={14} className="text-plate-sta" aria-hidden />
+                <TrendingUp size={14} className="text-plate-galvanized" aria-hidden />
                 <span className="tabular-nums">{fmt1(hero.bestE1rm)} kg</span> best e1RM
               </span>
             </div>
@@ -790,7 +1077,7 @@ function Logger({ hero, setsToday, draft, setDraft, onBank, notify }) {
                   </motion.span>
                   <span className="font-data text-sm text-chalk-muted">XP</span>
                   {preview.mult < 1 && (
-                    <span className="font-data text-xs px-1.5 py-0.5 rounded bg-plate-str/20 text-plate-str">
+                    <span className="font-data text-xs px-1.5 py-0.5 rounded bg-plate-oxide/20 text-plate-oxide">
                       ×{preview.mult.toFixed(preview.mult < 0.1 ? 3 : 2)}
                     </span>
                   )}
@@ -809,7 +1096,7 @@ function Logger({ hero, setsToday, draft, setDraft, onBank, notify }) {
           </div>
 
           {preview.mult < 1 && (
-            <p className="mt-3 flex items-start gap-1.5 text-xs text-plate-con">
+            <p className="mt-3 flex items-start gap-1.5 text-xs text-plate-brass">
               <AlertTriangle size={13} className="mt-px shrink-0" aria-hidden />
               Past {RULES.freeSetsPerExercise} sets of one movement in a day, each further set pays half the last.
             </p>
@@ -842,7 +1129,7 @@ function Logger({ hero, setsToday, draft, setDraft, onBank, notify }) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-chalk truncate">
                     {d.exerciseName}
-                    {d.flag && <Shield size={12} className="inline ml-1.5 -mt-0.5 text-plate-con" aria-label="Flagged for verification" />}
+                    {d.flag && <Shield size={12} className="inline ml-1.5 -mt-0.5 text-plate-brass" aria-label="Flagged for verification" />}
                   </p>
                   <p className="font-data text-xs text-chalk-muted tabular-nums">
                     {d.kind === 'CARDIO'
@@ -854,7 +1141,7 @@ function Logger({ hero, setsToday, draft, setDraft, onBank, notify }) {
                 <button
                   onClick={() => setDraft((list) => list.filter((x) => x.id !== d.id))}
                   aria-label={`Remove ${d.exerciseName}`}
-                  className="shrink-0 p-[14.5px] -m-[14.5px] text-chalk-muted hover:text-plate-str
+                  className="shrink-0 p-[14.5px] -m-[14.5px] text-chalk-muted hover:text-plate-oxide
                     transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-plate-ember
                     focus-visible:ring-inset rounded"
                 >
@@ -874,7 +1161,7 @@ function Logger({ hero, setsToday, draft, setDraft, onBank, notify }) {
             <span className="font-display text-2xl text-plate-ember tabular-nums">{fmt(draftTotals.granted)}</span>
           </div>
           {capped && (
-            <p className="flex items-start gap-1.5 text-xs text-plate-strText">
+            <p className="flex items-start gap-1.5 text-xs text-plate-oxideText">
               <AlertTriangle size={13} className="mt-px shrink-0" aria-hidden />
               Daily cap reached. XP past {fmt(RULES.dailyXpCap)} is not banked — it resets at midnight.
             </p>
@@ -889,7 +1176,7 @@ function Logger({ hero, setsToday, draft, setDraft, onBank, notify }) {
 }
 
 function Row({ label, value, tone = 'dim' }) {
-  const colors = { dim: 'text-chalk-dim', bad: 'text-plate-strText' };
+  const colors = { dim: 'text-chalk-dim', bad: 'text-plate-oxideText' };
   return (
     <div className="flex items-baseline justify-between text-sm">
       <span className="text-chalk-muted">{label}</span>
@@ -1146,10 +1433,10 @@ function StatusPill({ duel }) {
     PENDING: ['Pending', 'bg-iron-700 text-chalk-dim'],
     ACTIVE: ['Live', 'bg-plate-ember/20 text-plate-ember'],
     COMPLETED: duel.outcome === 'WIN'
-      ? ['Won', 'bg-plate-jade/20 text-plate-jade']
+      ? ['Won', 'bg-plate-patina/20 text-plate-patina']
       : duel.outcome === 'DRAW'
         ? ['Draw', 'bg-iron-700 text-chalk-dim']
-        : ['Lost', 'bg-plate-str/20 text-plate-str'],
+        : ['Lost', 'bg-plate-oxide/20 text-plate-oxide'],
     DECLINED: ['Declined', 'bg-iron-700 text-chalk-dim'],
   };
   const [label, cls] = map[duel.status] ?? ['—', 'bg-iron-700 text-chalk-dim'];
@@ -1175,7 +1462,7 @@ function Leaderboard({ hero, stats }) {
   return (
     <Panel className="overflow-hidden">
       <div className="px-5 py-4 border-b border-iron-700 flex items-center gap-2">
-        <Crown size={16} className="text-plate-con" aria-hidden />
+        <Crown size={16} className="text-plate-brass" aria-hidden />
         <Eyebrow>Guild standings</Eyebrow>
       </div>
       <div className="overflow-x-auto">
@@ -1198,7 +1485,7 @@ function Leaderboard({ hero, stats }) {
                 className={`border-t border-iron-700 ${r.isYou ? 'bg-plate-ember/10' : ''}`}
               >
                 <td className="px-3 pl-5 py-3 font-display text-xl tabular-nums text-chalk-dim">
-                  {i === 0 ? <span className="text-plate-con">1</span> : i + 1}
+                  {i === 0 ? <span className="text-plate-brass">1</span> : i + 1}
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-2 min-w-0">
@@ -1211,8 +1498,8 @@ function Leaderboard({ hero, stats }) {
                   </div>
                 </td>
                 <td className="px-3 py-3 font-data tabular-nums text-chalk">{r.level}</td>
-                <td className="px-3 py-3 font-data tabular-nums text-plate-strText">{r.str}</td>
-                <td className="px-3 py-3 font-data tabular-nums text-plate-staText">{r.sta}</td>
+                <td className="px-3 py-3 font-data tabular-nums text-plate-oxideText">{r.str}</td>
+                <td className="px-3 py-3 font-data tabular-nums text-plate-galvanizedText">{r.sta}</td>
                 <td className="px-3 py-3 font-data tabular-nums" style={{ color: STAT_META.con.color }}>{r.con}</td>
                 <td className="px-3 py-3 font-data tabular-nums text-chalk-dim">{r.streak}</td>
                 <td className="px-3 pr-5 py-3 font-data tabular-nums text-chalk-dim">{r.duelsWon}</td>
@@ -1283,8 +1570,8 @@ function LevelUpOverlay({ levelUp, onDone }) {
                 transition={{ duration: 1.6, delay: i * 0.22, repeat: Infinity }}
               />
             ))}
-            <Sparkles size={30} className="text-plate-con mx-auto mb-2 relative" aria-hidden />
-            <p className="font-data uppercase tracking-[0.3em] text-plate-con text-sm relative">Level up</p>
+            <Sparkles size={30} className="text-plate-brass mx-auto mb-2 relative" aria-hidden />
+            <p className="font-data uppercase tracking-[0.3em] text-plate-brass text-sm relative">Level up</p>
             <p className="font-display text-7xl sm:text-8xl text-chalk leading-none relative">
               {levelUp.newLevel}
             </p>
@@ -1315,10 +1602,10 @@ function LevelUpOverlay({ levelUp, onDone }) {
 
 function Toasts({ toasts, dismiss }) {
   const tones = {
-    reject: { cls: 'border-plate-str bg-plate-str/15 text-chalk', Icon: X },
-    flag: { cls: 'border-plate-con bg-plate-con/15 text-chalk', Icon: Shield },
+    reject: { cls: 'border-plate-oxide bg-plate-oxide/15 text-chalk', Icon: X },
+    flag: { cls: 'border-plate-brass bg-plate-brass/15 text-chalk', Icon: Shield },
     info: { cls: 'border-iron-600 bg-iron-800 text-chalk-dim', Icon: AlertTriangle },
-    good: { cls: 'border-plate-jade bg-plate-jade/15 text-chalk', Icon: Check },
+    good: { cls: 'border-plate-patina bg-plate-patina/15 text-chalk', Icon: Check },
   };
   return (
     // This wrapper never unmounts, unlike the toasts inside it, so a screen
